@@ -7,6 +7,7 @@ class AQISimulator:
     def __init__(self, num_nodes=100):
         self.num_nodes = num_nodes
         self.nodes = self._generate_nodes()
+        self.history = {node["id"]: [] for node in self.nodes}
 
     def _generate_nodes(self):
         base_lat = 28.6139
@@ -39,6 +40,7 @@ class AQISimulator:
 
     def simulate(self):
         current_hour = datetime.datetime.now().hour
+        timestamp = datetime.datetime.now().isoformat()
 
         for node in self.nodes:
 
@@ -60,4 +62,21 @@ class AQISimulator:
             node["pm25"] = pm25
             node["category"] = self._get_aqi_category(pm25)
 
+            # Save to history
+            self.history[node["id"]].append({
+                "timestamp": timestamp,
+                "pm25": pm25
+            })
+
+            # Keep only last 50 readings
+            if len(self.history[node["id"]]) > 50:
+                self.history[node["id"]] = self.history[node["id"]][-50:]
+
         return self.nodes
+
+    def get_history(self, node_id):
+        return self.history.get(node_id, [])
+    
+    def get_last_n_pm25(self, node_id, n=10):
+        history = self.history.get(node_id, [])
+        return [entry["pm25"] for entry in history[-n:]]
