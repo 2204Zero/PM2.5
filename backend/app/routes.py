@@ -1,6 +1,5 @@
 import numpy as np
 from sklearn.linear_model import LinearRegression
-
 from fastapi import APIRouter
 from app.simulator import AQISimulator
 
@@ -23,72 +22,18 @@ def health_check():
 @router.get("/nodes/live")
 def get_live_nodes():
     data = simulator.simulate()
+    print("Total nodes:", len(data))
     return {"nodes": data}
 
 
 # -------------------------
-# Node History
-# -------------------------
-@router.get("/node/{node_id}/history")
-def get_node_history(node_id: int):
-    history = simulator.get_history(node_id)
-    return {"node_id": node_id, "history": history}
-
-
-# -------------------------
-# Node Prediction (Next 5 Steps)
-# -------------------------
-@router.get("/node/{node_id}/predict")
-def predict_next(node_id: int):
-
-    values = simulator.get_last_n_pm25(node_id, n=10)
-
-    if len(values) < 5:
-        return {"error": "Not enough data yet"}
-
-    X = np.array(range(len(values))).reshape(-1, 1)
-    y = np.array(values)
-
-    model = LinearRegression()
-    model.fit(X, y)
-
-    future_steps = 5
-    predictions = []
-
-    for step in range(len(values), len(values) + future_steps):
-        pred = model.predict(np.array([[step]]))
-        predictions.append(float(pred[0]))
-
-    return {
-        "node_id": node_id,
-        "last_values": values,
-        "predicted_next_5": predictions
-    }
-
-
-# -------------------------
-# Live Zone Summary
+# Live Zone Summary (Updated)
 # -------------------------
 @router.get("/zones/live")
 def get_zones_live():
-
-    # Run simulation to update zone history
     simulator.simulate()
-
-    zone_summary = []
-
-    for zone_id in range(4):
-        history = simulator.get_zone_history(zone_id)
-
-        if history:
-            latest = history[-1]
-            zone_summary.append({
-                "zone_id": zone_id,
-                "avg_pm25": latest["avg_pm25"],
-                "category": latest["category"]
-            })
-
-    return {"zones": zone_summary}
+    summary = simulator.get_zone_summary()
+    return {"zones": summary}
 
 
 # -------------------------
@@ -99,6 +44,10 @@ def get_zone_history(zone_id: int):
     history = simulator.get_zone_history(zone_id)
     return {"zone_id": zone_id, "history": history}
 
+
+# -------------------------
+# Zone AQI Prediction
+# -------------------------
 @router.get("/zone/{zone_id}/predict")
 def predict_zone(zone_id: int):
 
@@ -107,7 +56,8 @@ def predict_zone(zone_id: int):
     if len(history) < 5:
         return {"error": "Not enough zone data yet"}
 
-    values = [entry["avg_pm25"] for entry in history[-10:]]
+    # Use AQI values instead of PM25 only
+    values = [entry["aqi"] for entry in history[-10:]]
 
     X = np.array(range(len(values))).reshape(-1, 1)
     y = np.array(values)
@@ -122,22 +72,24 @@ def predict_zone(zone_id: int):
         pred = model.predict(np.array([[step]]))
         predictions.append(float(pred[0]))
 
-    # Determine highest predicted value
     max_future = max(predictions)
 
-    # Risk classification
     if max_future <= 50:
-        risk_level = "Low"
+        risk_level = "Good"
     elif max_future <= 100:
+        risk_level = "Satisfactory"
+    elif max_future <= 200:
         risk_level = "Moderate"
-    elif max_future <= 150:
-        risk_level = "High"
+    elif max_future <= 300:
+        risk_level = "Poor"
+    elif max_future <= 400:
+        risk_level = "Very Poor"
     else:
         risk_level = "Severe"
 
     return {
         "zone_id": zone_id,
-        "last_zone_avg": values,
+        "last_aqi_values": values,
         "predicted_next_5": predictions,
         "risk_level": risk_level
     }
