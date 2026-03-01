@@ -14,7 +14,7 @@
 
 ## Overview
 
-Urban AQI Intelligence is a full-stack environmental monitoring system designed to simulate distributed air quality nodes, aggregate zone-level intelligence, and provide predictive forecasting under a secure authentication framework.
+PM2.5 is a full-stack environmental monitoring system designed to simulate distributed air quality nodes, aggregate zone-level intelligence, and provide predictive forecasting under a secure authentication framework.
 
 The platform models a scalable smart-city air monitoring architecture.
 
@@ -104,3 +104,4 @@ python -m venv venv
 venv\Scripts\activate
 pip install -r requirements.txt
 uvicorn app.main:app --reload
+
