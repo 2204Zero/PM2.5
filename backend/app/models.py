@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, Float, String, DateTime
+from sqlalchemy import Column, Integer, Float, String, DateTime, Boolean
 from sqlalchemy.sql import func
 from app.database import Base
 
@@ -56,3 +56,16 @@ class CityLog(Base):
     id = Column(Integer, primary_key=True, index=True)
     city_name = Column(String)
     timestamp = Column(DateTime(timezone=True), server_default=func.now())
+
+
+# -------------------------
+# User Table (NEW)
+# -------------------------
+class User(Base):
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True, index=True)
+    username = Column(String, unique=True, index=True)
+    hashed_password = Column(String)
+    is_admin = Column(Boolean, default=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())

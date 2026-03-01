@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import axios from "axios";
+import axios from "../axiosConfig";
 import MapView from "../components/MapView";
 
 function Dashboard() {
@@ -13,17 +13,17 @@ function Dashboard() {
   const navigate = useNavigate();
 
   const fetchZones = async () => {
-    const res = await axios.get("http://127.0.0.1:8000/zones/live");
+    const res = await axios.get("/zones/live");
     setZones(res.data.zones);
   };
 
   const fetchNodes = async () => {
-    const res = await axios.get("http://127.0.0.1:8000/nodes/live");
+    const res = await axios.get("/nodes/live");
     setNodes(res.data.nodes);
   };
 
   const fetchCities = async () => {
-  const res = await axios.get("http://127.0.0.1:8000/city/list");
+  const res = await axios.get("/city/list");
   setCities(res.data.cities);
 
   if (!selectedCity && res.data.cities.length > 0) {

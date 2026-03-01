@@ -1,60 +1,118 @@
 import numpy as np
 from sklearn.linear_model import LinearRegression
-from fastapi import APIRouter
-from app.simulator import AQISimulator
-from fastapi import HTTPException
+from fastapi import APIRouter, HTTPException, Depends
+from fastapi.security import OAuth2PasswordRequestForm
+from sqlalchemy.orm import Session
 
+from app.simulator import AQISimulator
+from app.auth import (
+    hash_password,
+    verify_password,
+    create_access_token,
+    get_db,
+    get_current_user,
+)
+from app.models import User
 
 router = APIRouter()
-
 simulator = AQISimulator()
 
+# =====================================================
+# AUTH ROUTES
+# =====================================================
 
-# -------------------------
-# Health Check
-# -------------------------
+@router.post("/auth/register")
+def register(
+    username: str,
+    password: str,
+    db: Session = Depends(get_db)
+):
+    existing_user = db.query(User).filter(User.username == username).first()
+    if existing_user:
+        raise HTTPException(status_code=400, detail="Username already exists")
+
+    new_user = User(
+        username=username,
+        hashed_password=hash_password(password),
+        is_admin=True
+    )
+
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+
+    return {"message": "User created successfully"}
+
+
+@router.post("/auth/login")
+def login(
+    form_data: OAuth2PasswordRequestForm = Depends(),
+    db: Session = Depends(get_db)
+):
+    user = db.query(User).filter(User.username == form_data.username).first()
+
+    if not user or not verify_password(form_data.password, user.hashed_password):
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+
+    access_token = create_access_token(data={"sub": user.username})
+
+    return {
+        "access_token": access_token,
+        "token_type": "bearer"
+    }
+
+
+# =====================================================
+# HEALTH
+# =====================================================
+
 @router.get("/health")
 def health_check():
     return {"status": "OK"}
 
 
-# -------------------------
-# Live Node Data
-# -------------------------
+# =====================================================
+# LIVE DATA (Protected)
+# =====================================================
+
 @router.get("/nodes/live")
-def get_live_nodes():
+def get_live_nodes(current_user: User = Depends(get_current_user)):
     return {"nodes": simulator.nodes}
 
-# -------------------------
-# Live Zone Summary (Updated)
-# -------------------------
+
 @router.get("/zones/live")
-def get_zones_live():
+def get_zones_live(current_user: User = Depends(get_current_user)):
     summary = simulator.get_zone_summary()
     return {"zones": summary}
 
 
-# -------------------------
-# Zone History
-# -------------------------
+# =====================================================
+# ZONE HISTORY (Protected)
+# =====================================================
+
 @router.get("/zone/{zone_id}/history")
-def get_zone_history(zone_id: int):
+def get_zone_history(
+    zone_id: int,
+    current_user: User = Depends(get_current_user)
+):
     history = simulator.get_zone_history(zone_id)
     return {"zone_id": zone_id, "history": history}
 
 
-# -------------------------
-# Zone AQI Prediction
-# -------------------------
-@router.get("/zone/{zone_id}/predict")
-def predict_zone(zone_id: int):
+# =====================================================
+# ZONE PREDICTION (Protected)
+# =====================================================
 
+@router.get("/zone/{zone_id}/predict")
+def predict_zone(
+    zone_id: int,
+    current_user: User = Depends(get_current_user)
+):
     history = simulator.get_zone_history(zone_id)
 
     if len(history) < 5:
         return {"error": "Not enough zone data yet"}
 
-    # Use AQI values instead of PM25 only
     values = [entry["aqi"] for entry in history[-10:]]
 
     X = np.array(range(len(values))).reshape(-1, 1)
@@ -93,9 +151,15 @@ def predict_zone(zone_id: int):
     }
 
 
-@router.post("/city/set/{city_name}")
-def set_city(city_name: str):
+# =====================================================
+# CITY CONTROL (Protected)
+# =====================================================
 
+@router.post("/city/set/{city_name}")
+def set_city(
+    city_name: str,
+    current_user: User = Depends(get_current_user)
+):
     success = simulator.set_city(city_name)
 
     if not success:
@@ -103,14 +167,16 @@ def set_city(city_name: str):
 
     return {"message": f"City changed to {city_name}"}
 
+
 @router.get("/city/current")
-def get_current_city():
+def get_current_city(current_user: User = Depends(get_current_user)):
     return {
         "city_center_lat": simulator.city_center_lat,
         "city_center_lon": simulator.city_center_lon
     }
 
+
 @router.get("/city/list")
-def list_cities():
+def list_cities(current_user: User = Depends(get_current_user)):
     from app.config import CITIES
     return {"cities": list(CITIES.keys())}
