@@ -1,9 +1,45 @@
-import { useState } from "react";
-import { MapContainer, TileLayer, CircleMarker, Popup } from "react-leaflet";
+import { useState, useEffect } from "react";
+import axios from "axios";
+import {
+  MapContainer,
+  TileLayer,
+  CircleMarker,
+  Popup,
+  useMap
+} from "react-leaflet";
 import HeatmapLayer from "./HeatmapLayer";
 
-function MapView({ zones }) {
+// Helper component to recenter map dynamically
+function RecenterMap({ center }) {
+  const map = useMap();
+  useEffect(() => {
+    map.setView(center, 12);
+  }, [center, map]);
+  return null;
+}
+
+function MapView({ zones, nodes, viewMode, city }) {
   const [mode, setMode] = useState("heatmap");
+  const [mapCenter, setMapCenter] = useState([28.6139, 77.2090]); // default fallback
+
+  // Fetch city center from backend
+  useEffect(() => {
+    const fetchCityCenter = async () => {
+      try {
+        const res = await axios.get(
+          "http://127.0.0.1:8000/city/current"
+        );
+        setMapCenter([
+          res.data.city_center_lat,
+          res.data.city_center_lon
+        ]);
+      } catch (error) {
+        console.error("Failed to fetch city center:", error);
+      }
+    };
+
+    fetchCityCenter();
+  }, [city]);
 
   const getAQIColor = (aqi) => {
     if (aqi <= 50) return "#16a34a";
@@ -29,10 +65,16 @@ function MapView({ zones }) {
       </div>
 
       <MapContainer
-        center={[28.6139, 77.2090]}
+        center={mapCenter}
         zoom={12}
-        style={{ height: "500px", width: "100%", borderRadius: "12px" }}
+        style={{
+          height: "500px",
+          width: "100%",
+          borderRadius: "12px"
+        }}
       >
+        <RecenterMap center={mapCenter} />
+
         <TileLayer
           attribution="© OpenStreetMap contributors"
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -56,7 +98,7 @@ function MapView({ zones }) {
                 <Popup>
                   <strong>Zone {zone.zone_id}</strong><br />
                   AQI: {zone.aqi}<br />
-                  Dominant: {zone.dominant_pollutant.toUpperCase()}
+                  Dominant: {zone.dominant_pollutant?.toUpperCase()}
                 </Popup>
               </CircleMarker>
             ))}

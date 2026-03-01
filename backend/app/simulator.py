@@ -2,6 +2,10 @@
 
 import random
 import datetime
+import requests
+import time
+
+from app.config import DATA_MODE, REAL_FETCH_INTERVAL_SECONDS, CITY_NAME, CITIES
 from app.aqi_calculator import AQICalculator
 
 
@@ -11,14 +15,19 @@ class AQISimulator:
         self.rows = rows
         self.cols = cols
         self.nodes_per_zone = nodes_per_zone
-
         self.num_nodes = rows * cols * nodes_per_zone
 
-        # Delhi-like bounding box
-        self.base_lat = 28.55
-        self.base_lon = 77.15
+        # Load initial city
+        city_config = CITIES.get(CITY_NAME.lower(), CITIES["delhi"])
+
+        self.city_center_lat = city_config["lat"]
+        self.city_center_lon = city_config["lon"]
+
         self.lat_range = 0.06
         self.lon_range = 0.06
+
+        self.base_lat = self.city_center_lat - (self.lat_range / 2)
+        self.base_lon = self.city_center_lon - (self.lon_range / 2)
 
         self.aqi_engine = AQICalculator(standard="india")
 
@@ -27,12 +36,14 @@ class AQISimulator:
         self.node_history = {node["id"]: [] for node in self.nodes}
         self.zone_history = {z: [] for z in range(self.rows * self.cols)}
 
+        self.real_zone_cache = {}
+        self.last_real_fetch = 0
+
     # --------------------------------------------------
-    # Generate structured nodes per zone
+    # Generate structured nodes
     # --------------------------------------------------
     def _generate_nodes(self):
         nodes = []
-
         zone_height = self.lat_range / self.rows
         zone_width = self.lon_range / self.cols
 
@@ -72,11 +83,144 @@ class AQISimulator:
         return nodes
 
     # --------------------------------------------------
-    # Simulate pollutants
+    # PUBLIC simulate()
+    # --------------------------------------------------
+    def simulate(self):
+        if DATA_MODE == "real":
+            return self._simulate_real_mode()
+        return self._simulate_fake_mode()
+
+    # --------------------------------------------------
+    # FAKE MODE
+    # --------------------------------------------------
+    def _simulate_fake_mode(self):
+
+        timestamp = datetime.datetime.now().isoformat()
+
+        for node in self.nodes:
+            pollutants = self._simulate_pollutants()
+            node.update(pollutants)
+
+            self.node_history[node["id"]].append({
+                "timestamp": timestamp,
+                **pollutants
+            })
+
+            if len(self.node_history[node["id"]]) > 50:
+                self.node_history[node["id"]] = self.node_history[node["id"]][-50:]
+
+        self._update_zone_history(timestamp)
+        return self.nodes
+
+    # --------------------------------------------------
+    # REAL MODE
+    # --------------------------------------------------
+    def _simulate_real_mode(self):
+
+        current_time = time.time()
+
+        if current_time - self.last_real_fetch > REAL_FETCH_INTERVAL_SECONDS:
+            self._fetch_real_zone_data()
+            self.last_real_fetch = current_time
+
+        timestamp = datetime.datetime.now().isoformat()
+
+        for node in self.nodes:
+
+            zone_data = self.real_zone_cache.get(node["zone"])
+
+            if not zone_data:
+                zone_data = {
+                    "pm25": 40,
+                    "pm10": 60,
+                    "no2": 50,
+                    "co": 1.0,
+                    "o3": 50
+                }
+
+            node.update({
+                "pm25": max(5, zone_data["pm25"] + random.uniform(-3, 3)),
+                "pm10": max(10, zone_data["pm10"] + random.uniform(-5, 5)),
+                "no2": max(5, zone_data["no2"] + random.uniform(-5, 5)),
+                "co": max(0.1, zone_data["co"] + random.uniform(-0.2, 0.2)),
+                "o3": max(5, zone_data["o3"] + random.uniform(-5, 5)),
+                "temperature": random.randint(20, 40),
+                "humidity": random.randint(30, 90)
+            })
+
+            self.node_history[node["id"]].append({
+                "timestamp": timestamp,
+                "pm25": node["pm25"],
+                "pm10": node["pm10"],
+                "no2": node["no2"],
+                "co": node["co"],
+                "o3": node["o3"]
+            })
+
+            if len(self.node_history[node["id"]]) > 50:
+                self.node_history[node["id"]] = self.node_history[node["id"]][-50:]
+
+        self._update_zone_history(timestamp)
+        return self.nodes
+
+    # --------------------------------------------------
+    # Fetch real data per zone
+    # --------------------------------------------------
+    def _fetch_real_zone_data(self):
+
+        for zone_id in range(self.rows * self.cols):
+
+            zone_nodes = [n for n in self.nodes if n["zone"] == zone_id]
+
+            if not zone_nodes:
+                continue
+
+            avg_lat = sum(n["latitude"] for n in zone_nodes) / len(zone_nodes)
+            avg_lon = sum(n["longitude"] for n in zone_nodes) / len(zone_nodes)
+
+            url = (
+                f"https://air-quality-api.open-meteo.com/v1/air-quality"
+                f"?latitude={avg_lat}&longitude={avg_lon}"
+                f"&hourly=pm2_5,pm10,nitrogen_dioxide,ozone"
+            )
+
+            try:
+                response = requests.get(url, timeout=10)
+                data = response.json()
+
+                def safe_last_valid(values, default):
+                    for v in reversed(values):
+                        if v is not None:
+                            return v
+                    return default
+
+                pm25 = safe_last_valid(data["hourly"]["pm2_5"], 40)
+                pm10 = safe_last_valid(data["hourly"]["pm10"], 60)
+                no2 = safe_last_valid(data["hourly"]["nitrogen_dioxide"], 50)
+                o3 = safe_last_valid(data["hourly"]["ozone"], 50)
+
+                self.real_zone_cache[zone_id] = {
+                    "pm25": pm25,
+                    "pm10": pm10,
+                    "no2": no2,
+                    "co": 1.0,
+                    "o3": o3
+                }
+
+            except Exception:
+                self.real_zone_cache[zone_id] = {
+                    "pm25": 40,
+                    "pm10": 60,
+                    "no2": 50,
+                    "co": 1.0,
+                    "o3": 50
+                }
+
+    # --------------------------------------------------
+    # Pollutant simulation
     # --------------------------------------------------
     def _simulate_pollutants(self):
         current_hour = datetime.datetime.now().hour
-
         base_pm = 40
 
         if 7 <= current_hour <= 10 or 17 <= current_hour <= 21:
@@ -93,28 +237,6 @@ class AQISimulator:
             "temperature": random.randint(20, 40),
             "humidity": random.randint(30, 90)
         }
-
-    # --------------------------------------------------
-    # Simulation cycle
-    # --------------------------------------------------
-    def simulate(self):
-        timestamp = datetime.datetime.now().isoformat()
-
-        for node in self.nodes:
-            pollutants = self._simulate_pollutants()
-            node.update(pollutants)
-
-            self.node_history[node["id"]].append({
-                "timestamp": timestamp,
-                **pollutants
-            })
-
-            if len(self.node_history[node["id"]]) > 50:
-                self.node_history[node["id"]] = self.node_history[node["id"]][-50:]
-
-        self._update_zone_history(timestamp)
-
-        return self.nodes
 
     # --------------------------------------------------
     # Zone aggregation
@@ -140,6 +262,9 @@ class AQISimulator:
             }
 
             aqi_result = self.aqi_engine.calculate_aqi(avg_data)
+
+            if not aqi_result:
+                continue
 
             trend = self._calculate_trend(zone_id, aqi_result["aqi"])
 
@@ -176,7 +301,7 @@ class AQISimulator:
             return "stable"
 
     # --------------------------------------------------
-    # Zone summary with centroid
+    # Zone summary
     # --------------------------------------------------
     def get_zone_summary(self):
 
@@ -190,9 +315,6 @@ class AQISimulator:
             latest = history[-1]
 
             zone_nodes = [n for n in self.nodes if n["zone"] == zone_id]
-
-            if not zone_nodes:
-                continue
 
             avg_lat = sum(n["latitude"] for n in zone_nodes) / len(zone_nodes)
             avg_lon = sum(n["longitude"] for n in zone_nodes) / len(zone_nodes)
@@ -211,3 +333,29 @@ class AQISimulator:
 
     def get_zone_history(self, zone_id):
         return self.zone_history.get(zone_id, [])
+
+    # --------------------------------------------------
+    # Change city dynamically
+    # --------------------------------------------------
+    def set_city(self, city_name):
+
+        city_config = CITIES.get(city_name.lower())
+
+        if not city_config:
+            return False
+
+        self.city_center_lat = city_config["lat"]
+        self.city_center_lon = city_config["lon"]
+
+        self.base_lat = self.city_center_lat - (self.lat_range / 2)
+        self.base_lon = self.city_center_lon - (self.lon_range / 2)
+
+        self.nodes = self._generate_nodes()
+
+        self.node_history = {node["id"]: [] for node in self.nodes}
+        self.zone_history = {z: [] for z in range(self.rows * self.cols)}
+
+        self.real_zone_cache = {}
+        self.last_real_fetch = 0
+
+        return True

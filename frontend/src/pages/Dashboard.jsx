@@ -6,7 +6,10 @@ import MapView from "../components/MapView";
 function Dashboard() {
   const [zones, setZones] = useState([]);
   const [nodes, setNodes] = useState([]);
-  const [viewMode, setViewMode] = useState("zone"); // "zone" | "heatmap"
+  const [cities, setCities] = useState([]);
+  const [selectedCity, setSelectedCity] = useState("");
+  const [viewMode, setViewMode] = useState("zone");
+
   const navigate = useNavigate();
 
   const fetchZones = async () => {
@@ -19,7 +22,24 @@ function Dashboard() {
     setNodes(res.data.nodes);
   };
 
+  const fetchCities = async () => {
+    const res = await axios.get("http://127.0.0.1:8000/city/list");
+    setCities(res.data.cities);
+
+    if (res.data.cities.length > 0) {
+      setSelectedCity(res.data.cities[0]);
+    }
+  };
+
+  const changeCity = async (city) => {
+    await axios.post(`http://127.0.0.1:8000/city/set/${city}`);
+    setSelectedCity(city);
+    await fetchZones();
+    await fetchNodes();
+  };
+
   useEffect(() => {
+    fetchCities();
     fetchZones();
     fetchNodes();
 
@@ -48,10 +68,29 @@ function Dashboard() {
 
   return (
     <div style={{ padding: "40px", fontFamily: "Segoe UI" }}>
-      <h1>City AQI Control Panel</h1>
+      <h1>PM2.5 Admin Panel</h1>
+
+      {/* CITY SELECTOR */}
+      <div style={{ marginTop: "20px", marginBottom: "20px" }}>
+        <label style={{ marginRight: "10px", fontWeight: "600" }}>
+          Select City:
+        </label>
+
+        <select
+          value={selectedCity}
+          onChange={(e) => changeCity(e.target.value)}
+          style={{ padding: "6px 10px" }}
+        >
+          {cities.map((city) => (
+            <option key={city} value={city}>
+              {city.toUpperCase()}
+            </option>
+          ))}
+        </select>
+      </div>
 
       {/* VIEW TOGGLE */}
-      <div style={{ marginTop: "20px", marginBottom: "20px" }}>
+      <div style={{ marginBottom: "20px" }}>
         <button
           onClick={() => setViewMode("zone")}
           style={{
@@ -83,7 +122,7 @@ function Dashboard() {
       </div>
 
       {/* MAP */}
-      <MapView zones={zones} nodes={nodes} viewMode={viewMode} />
+      <MapView zones={zones} nodes={nodes} viewMode={viewMode} city={selectedCity} />
 
       {/* ZONE CARDS */}
       <div

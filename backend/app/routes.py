@@ -2,6 +2,8 @@ import numpy as np
 from sklearn.linear_model import LinearRegression
 from fastapi import APIRouter
 from app.simulator import AQISimulator
+from fastapi import HTTPException
+
 
 router = APIRouter()
 
@@ -93,3 +95,26 @@ def predict_zone(zone_id: int):
         "predicted_next_5": predictions,
         "risk_level": risk_level
     }
+
+
+@router.post("/city/set/{city_name}")
+def set_city(city_name: str):
+
+    success = simulator.set_city(city_name)
+
+    if not success:
+        raise HTTPException(status_code=400, detail="Invalid city name")
+
+    return {"message": f"City changed to {city_name}"}
+
+@router.get("/city/current")
+def get_current_city():
+    return {
+        "city_center_lat": simulator.city_center_lat,
+        "city_center_lon": simulator.city_center_lon
+    }
+
+@router.get("/city/list")
+def list_cities():
+    from app.config import CITIES
+    return {"cities": list(CITIES.keys())}
