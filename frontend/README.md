@@ -1,16 +1,106 @@
-# React + Vite
+<p align="center">
+  <img src="https://readme-typing-svg.demolab.com?font=Inter&weight=600&size=28&pause=1000&color=1F7AE0&center=true&vCenter=true&width=700&lines=Urban+AQI+Intelligence;Real-Time+Air+Quality+Monitoring+Platform;Zone-Based+Intelligence+%7C+ML+Forecasting+%7C+Secure+Admin" />
+</p>
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+<p align="center">
+  <img src="https://img.shields.io/badge/Backend-FastAPI-009688?style=for-the-badge&logo=fastapi" />
+  <img src="https://img.shields.io/badge/Frontend-React-20232A?style=for-the-badge&logo=react" />
+  <img src="https://img.shields.io/badge/Database-SQLite-07405E?style=for-the-badge&logo=sqlite" />
+  <img src="https://img.shields.io/badge/Authentication-JWT-blue?style=for-the-badge" />
+  <img src="https://img.shields.io/badge/ML-ScikitLearn-F7931E?style=for-the-badge&logo=scikit-learn" />
+</p>
 
-Currently, two official plugins are available:
+---
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+## Overview
 
-## React Compiler
+Urban AQI Intelligence is a full-stack environmental monitoring system designed to simulate distributed air quality nodes, aggregate zone-level intelligence, and provide predictive forecasting under a secure authentication framework.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+The platform models a scalable smart-city air monitoring architecture.
 
-## Expanding the ESLint configuration
+---
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+## Architecture
+
+<details>
+<summary><b>Backend (FastAPI)</b></summary>
+
+- AQI Simulation Engine  
+- Zone Aggregation Engine  
+- JWT Authentication  
+- SQLite Logging  
+- ML Forecasting  
+- Protected APIs  
+
+</details>
+
+<details>
+<summary><b>Frontend (React + Leaflet)</b></summary>
+
+- Real-time Heatmap  
+- Zone Dashboard  
+- City Control Panel  
+- Session-Based Route Protection  
+
+</details>
+
+---
+
+## Authentication Flow
+
+1. User logs in  
+2. Backend generates JWT token  
+3. Token stored in sessionStorage  
+4. Axios attaches Authorization header  
+5. Protected routes validate identity  
+
+---
+
+## Core Capabilities
+
+### Real-Time Simulation
+- Node-level pollutant modeling
+- Zone-based AQI aggregation
+- Dominant pollutant detection
+- Trend classification
+
+### Real Data Mode
+- Open-Meteo API integration
+- Zone centroid-based retrieval
+- Smart caching layer
+
+### Intelligence Layer
+- Linear regression forecasting
+- 5-step AQI prediction
+- Risk categorization
+
+### Database Logging
+- Node readings
+- Zone readings
+- City logs
+- User accounts
+
+---
+
+## Technology Stack
+
+| Layer | Technologies |
+|-------|-------------|
+| Backend | FastAPI, SQLAlchemy, SQLite |
+| Frontend | React, React Router, Axios |
+| ML | scikit-learn |
+| Auth | JWT, Passlib (bcrypt) |
+| Maps | Leaflet |
+
+---
+
+## Setup
+
+### Backend
+
+```bash
+cd backend
+python -m venv venv
+venv\Scripts\activate
+pip install -r requirements.txt
+uvicorn app.main:app --reload
