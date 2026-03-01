@@ -23,17 +23,13 @@ def health_check():
 # -------------------------
 @router.get("/nodes/live")
 def get_live_nodes():
-    data = simulator.simulate()
-    print("Total nodes:", len(data))
-    return {"nodes": data}
-
+    return {"nodes": simulator.nodes}
 
 # -------------------------
 # Live Zone Summary (Updated)
 # -------------------------
 @router.get("/zones/live")
 def get_zones_live():
-    simulator.simulate()
     summary = simulator.get_zone_summary()
     return {"zones": summary}
 

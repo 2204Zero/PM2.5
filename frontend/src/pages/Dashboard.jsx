@@ -7,7 +7,7 @@ function Dashboard() {
   const [zones, setZones] = useState([]);
   const [nodes, setNodes] = useState([]);
   const [cities, setCities] = useState([]);
-  const [selectedCity, setSelectedCity] = useState("");
+  const [selectedCity, setSelectedCity] = useState(null);
   const [viewMode, setViewMode] = useState("zone");
 
   const navigate = useNavigate();
@@ -23,13 +23,13 @@ function Dashboard() {
   };
 
   const fetchCities = async () => {
-    const res = await axios.get("http://127.0.0.1:8000/city/list");
-    setCities(res.data.cities);
+  const res = await axios.get("http://127.0.0.1:8000/city/list");
+  setCities(res.data.cities);
 
-    if (res.data.cities.length > 0) {
-      setSelectedCity(res.data.cities[0]);
-    }
-  };
+  if (!selectedCity && res.data.cities.length > 0) {
+    setSelectedCity(res.data.cities[0]);
+  }
+};
 
   const changeCity = async (city) => {
     await axios.post(`http://127.0.0.1:8000/city/set/${city}`);
@@ -68,7 +68,7 @@ function Dashboard() {
 
   return (
     <div style={{ padding: "40px", fontFamily: "Segoe UI" }}>
-      <h1>PM2.5 Admin Panel</h1>
+      <h1>PM2.5 Admin Pannel</h1>
 
       {/* CITY SELECTOR */}
       <div style={{ marginTop: "20px", marginBottom: "20px" }}>
@@ -77,7 +77,7 @@ function Dashboard() {
         </label>
 
         <select
-          value={selectedCity}
+          value={selectedCity || ""}
           onChange={(e) => changeCity(e.target.value)}
           style={{ padding: "6px 10px" }}
         >
