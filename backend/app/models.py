@@ -69,3 +69,18 @@ class User(Base):
     hashed_password = Column(String)
     is_admin = Column(Boolean, default=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+# -------------------------
+# Alert Table (NEW)
+# -------------------------
+class Alert(Base):
+    __tablename__ = "alerts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    zone_id = Column(Integer, index=True)
+    aqi = Column(Float)
+    level = Column(String)  # Good, Satisfactory, Moderate, Poor, Very Poor, Severe
+    message = Column(String)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    acknowledged = Column(Boolean, default=False)

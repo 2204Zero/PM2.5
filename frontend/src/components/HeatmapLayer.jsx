@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { useMap } from "react-leaflet";
 import L from "leaflet";
 import "leaflet.heat";
@@ -6,22 +6,23 @@ import "leaflet.heat";
 function HeatmapLayer({ zones }) {
   const map = useMap();
 
-  useEffect(() => {
-    if (!zones || zones.length === 0) return;
-
-    const heatPoints = zones
+  const heatPoints = useMemo(() => {
+    if (!zones) return [];
+    return zones
       .filter(zone => zone.latitude && zone.longitude)
       .map(zone => [
         zone.latitude,
         zone.longitude,
-        Math.min(zone.aqi / 300, 1) // stronger scaling
+        Math.min(zone.aqi / 300, 1)
       ]);
+  }, [zones]);
 
+  useEffect(() => {
     if (heatPoints.length === 0) return;
 
     const heatLayer = L.heatLayer(heatPoints, {
-      radius: 60,      // increased radius
-      blur: 40,        // increased blur
+      radius: 60,
+      blur: 40,
       maxZoom: 15,
       max: 1.0,
       gradient: {
@@ -38,7 +39,7 @@ function HeatmapLayer({ zones }) {
     return () => {
       map.removeLayer(heatLayer);
     };
-  }, [zones, map]);
+  }, [heatPoints, map]);
 
   return null;
 }

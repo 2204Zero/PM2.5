@@ -7,47 +7,47 @@ class AQICalculator:
         self.breakpoints = self._load_breakpoints()
 
     def _load_breakpoints(self):
-        # Indian AQI breakpoints (simplified structured format)
+        # Indian AQI breakpoints (Continuous to handle floating-point results)
         return {
             "pm25": [
                 (0, 30, 0, 50),
-                (31, 60, 51, 100),
-                (61, 90, 101, 200),
-                (91, 120, 201, 300),
-                (121, 250, 301, 400),
-                (251, 500, 401, 500),
+                (30, 60, 50, 100),
+                (60, 90, 100, 200),
+                (90, 120, 200, 300),
+                (120, 250, 300, 400),
+                (250, 500, 400, 500),
             ],
             "pm10": [
                 (0, 50, 0, 50),
-                (51, 100, 51, 100),
-                (101, 250, 101, 200),
-                (251, 350, 201, 300),
-                (351, 430, 301, 400),
-                (431, 600, 401, 500),
+                (50, 100, 50, 100),
+                (100, 250, 100, 200),
+                (250, 350, 200, 300),
+                (350, 430, 300, 400),
+                (430, 600, 400, 500),
             ],
             "no2": [
                 (0, 40, 0, 50),
-                (41, 80, 51, 100),
-                (81, 180, 101, 200),
-                (181, 280, 201, 300),
-                (281, 400, 301, 400),
-                (401, 600, 401, 500),
+                (40, 80, 50, 100),
+                (80, 180, 100, 200),
+                (180, 280, 200, 300),
+                (280, 400, 300, 400),
+                (400, 600, 400, 500),
             ],
             "co": [
                 (0, 1, 0, 50),
-                (1.1, 2, 51, 100),
-                (2.1, 10, 101, 200),
-                (10.1, 17, 201, 300),
-                (17.1, 34, 301, 400),
-                (34.1, 50, 401, 500),
+                (1, 2, 50, 100),
+                (2, 10, 100, 200),
+                (10, 17, 200, 300),
+                (17, 34, 300, 400),
+                (34, 50, 400, 500),
             ],
             "o3": [
                 (0, 50, 0, 50),
-                (51, 100, 51, 100),
-                (101, 168, 101, 200),
-                (169, 208, 201, 300),
-                (209, 748, 301, 400),
-                (749, 1000, 401, 500),
+                (50, 100, 50, 100),
+                (100, 168, 100, 200),
+                (168, 208, 200, 300),
+                (208, 748, 300, 400),
+                (748, 1000, 400, 500),
             ],
         }
 
@@ -75,3 +75,20 @@ class AQICalculator:
             "dominant_pollutant": dominant,
             "sub_indices": sub_indices
         }
+
+    def get_aqi_level(self, aqi):
+        """Standard Indian AQI levels, adjusted for user requested alert thresholds."""
+        if aqi <= 50:
+            return "Good"
+        elif aqi <= 100:
+            return "Satisfactory"
+        elif aqi <= 200:
+            return "Moderate"
+        elif aqi < 300:
+            return "Moderate" # User wants Poor >= 300
+        elif aqi < 400:
+            return "Poor" # User wants Poor >= 300
+        elif aqi == 400:
+            return "Very Poor" # User wants Very Poor >= 400
+        else:
+            return "Severe" # User wants Severe > 400

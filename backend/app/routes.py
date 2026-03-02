@@ -12,7 +12,7 @@ from app.auth import (
     get_db,
     get_current_user,
 )
-from app.models import User
+from app.models import User, Alert, NodeReading, ZoneReading
 
 router = APIRouter()
 simulator = AQISimulator()
@@ -95,7 +95,22 @@ def get_zone_history(
     zone_id: int,
     current_user: User = Depends(get_current_user)
 ):
-    history = simulator.get_zone_history(zone_id)
+    raw_history = simulator.get_zone_history(zone_id)
+
+    # Flatten avg_pollutants for API consumers
+    history = []
+    for entry in raw_history:
+        avg = entry.get("avg_pollutants", {})
+        history.append({
+            "timestamp": entry.get("timestamp"),  # already ISO string
+            "aqi": entry.get("aqi"),
+            "pm25": avg.get("pm25"),
+            "pm10": avg.get("pm10"),
+            "no2": avg.get("no2"),
+            "co": avg.get("co"),
+            "o3": avg.get("o3"),
+        })
+
     return {"zone_id": zone_id, "history": history}
 
 
@@ -196,3 +211,75 @@ def set_simulation_interval(seconds: int):
 
     simulator.simulation_interval = seconds
     return {"simulation_interval": simulator.simulation_interval}
+
+
+# =====================================================
+# ALERT ENGINE ROUTES (Protected)
+# =====================================================
+
+@router.get("/alerts")
+def get_alerts(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Return latest 50 alerts ordered by created_at desc."""
+    alerts = db.query(Alert).order_by(Alert.created_at.desc()).limit(50).all()
+    return {"alerts": alerts}
+
+
+@router.post("/alerts/{alert_id}/acknowledge")
+def acknowledge_alert(
+    alert_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Mark an alert as acknowledged."""
+    alert = db.query(Alert).filter(Alert.id == alert_id).first()
+    if not alert:
+        raise HTTPException(status_code=404, detail="Alert not found")
+    
+    alert.acknowledged = True
+    db.commit()
+    return {"message": f"Alert {alert_id} acknowledged"}
+
+
+@router.get("/alerts/unacknowledged/count")
+def get_unacknowledged_count(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Return count of unacknowledged alerts and severe zone count."""
+    total_alerts = db.query(Alert).filter(Alert.acknowledged == False).count()
+    
+    severe_zone_count = db.query(Alert.zone_id)\
+        .filter(Alert.level == "Severe", Alert.acknowledged == False)\
+        .distinct().count()
+
+    return {
+        "total_alerts": total_alerts,
+        "severe_zone_count": severe_zone_count
+    }
+
+
+# =====================================================
+# SYSTEM STATUS (Protected)
+# =====================================================
+
+@router.get("/system/status")
+def get_system_status(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Return backend system status metrics."""
+    # Get last write times from DB
+    last_node = db.query(NodeReading.timestamp).order_by(NodeReading.timestamp.desc()).first()
+    last_zone = db.query(ZoneReading.timestamp).order_by(ZoneReading.timestamp.desc()).first()
+    
+    return {
+        "simulation_running": True,
+        "last_node_write_time": last_node[0] if last_node else None,
+        "last_zone_write_time": last_zone[0] if last_zone else None,
+        "total_zones": simulator.rows * simulator.cols,
+        "total_nodes": simulator.num_nodes,
+        "refresh_interval": simulator.simulation_interval
+    }

@@ -1,9 +1,41 @@
-import { useEffect, useState, useMemo } from "react";
+import React from "react";
+import { useEffect, useState, useMemo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "../axiosConfig";
 import MapView from "../components/MapView";
 import StatCard from "../pages/StatCard";
 import AnimatedNumber from "../components/AnimatedNumber";
+import AlertPanel from "../components/AlertPanel";
+import SystemStatusBar from "../components/SystemStatusBar";
+
+// --- Error Boundary Component ---
+class ErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError(error) {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error, errorInfo) {
+    console.error("Dashboard Error:", error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{ padding: "40px", textAlign: "center", color: "#EF4444" }}>
+          <h2>Something went wrong in the Control Center.</h2>
+          <button onClick={() => window.location.reload()}>Reload Dashboard</button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+// ---------------------------------
 
 function Dashboard() {
   const [zones, setZones] = useState([]);
@@ -15,6 +47,16 @@ function Dashboard() {
   const [isNarrow, setIsNarrow] = useState(
     typeof window !== "undefined" ? window.innerWidth < 1024 : false
   );
+
+  // --- Alert System State ---
+  const [isAlertPanelOpen, setIsAlertPanelOpen] = useState(false);
+  const [unacknowledgedCount, setUnacknowledgedCount] = useState(0);
+  const [severeZoneCount, setSevereZoneCount] = useState(0);
+  const [isSoundEnabled, setIsSoundEnabled] = useState(false);
+  const [systemStatus, setSystemStatus] = useState(null);
+  const prevSevereCount = useRef(0);
+  const audioRef = useRef(null);
+  // ---------------------------
 
   const navigate = useNavigate();
 
@@ -37,6 +79,40 @@ function Dashboard() {
     }
   };
 
+  const fetchAlertData = async () => {
+    try {
+      // Get unacknowledged count and severe zone count
+      const countRes = await axios.get("/alerts/unacknowledged/count");
+      setUnacknowledgedCount(countRes.data.total_alerts);
+      setSevereZoneCount(countRes.data.severe_zone_count);
+      
+      // Get system status
+      const statusRes = await axios.get("/system/status");
+      setSystemStatus(statusRes.data);
+    } catch (err) {
+      console.error("Failed to fetch alert and status data:", err);
+    }
+  };
+
+  const handleZoneClickSound = (aqi) => {
+    if (isSoundEnabled && aqi >= 400) {
+      if (audioRef.current) {
+        audioRef.current.currentTime = 0;
+        audioRef.current.play().catch(e => console.error("Audio play failed:", e));
+      }
+    }
+  };
+
+  // Sound logic - ONLY if count increases
+  useEffect(() => {
+    if (isSoundEnabled && severeZoneCount > prevSevereCount.current) {
+      if (audioRef.current) {
+        audioRef.current.play().catch(e => console.error("Audio play failed:", e));
+      }
+    }
+    prevSevereCount.current = severeZoneCount;
+  }, [severeZoneCount, isSoundEnabled]);
+
   const changeCity = async (city) => {
     await axios.post(`/city/set/${city}`);
     setSelectedCity(city);
@@ -46,7 +122,14 @@ function Dashboard() {
 
   useEffect(() => {
     fetchCities();
+    fetchAlertData();
   }, []);
+
+  // Alert polling (every 10s)
+  useEffect(() => {
+    const interval = setInterval(fetchAlertData, 10000);
+    return () => clearInterval(interval);
+  }, [isSoundEnabled]);
 
   useEffect(() => {
     console.log("Interval set to:", refreshInterval);
@@ -86,11 +169,12 @@ function Dashboard() {
   }, []);
 
   const getAQIColor = (aqi) => {
-    if (aqi <= 50) return "#22C55E";
-    if (aqi <= 100) return "#FACC15";
-    if (aqi <= 200) return "#F97316";
-    if (aqi <= 300) return "#EF4444";
-    return "#7F1D1D";
+    if (aqi <= 50) return "#22C55E"; // Good - Green
+    if (aqi <= 100) return "#FACC15"; // Satisfactory - Yellow
+    if (aqi <= 200) return "#F97316"; // Moderate - Orange
+    if (aqi <= 300) return "#F97316"; // Poor - Orange (User requested orange)
+    if (aqi <= 400) return "#EF4444"; // Very Poor - Red (User requested red)
+    return "#7F1D1D"; // Severe - Dark Red (User requested dark red)
   };
 
   const getTrendArrow = (trend) => {
@@ -148,9 +232,54 @@ function Dashboard() {
         fontFamily: "Inter, sans-serif",
         display: "flex",
         flexDirection: "column",
+        position: "relative",
+        overflowX: "hidden"
       }}
     >
-      <div style={{ flex: 1 }}>
+      <audio 
+        ref={audioRef} 
+        src="https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3" 
+        preload="auto" 
+      />
+
+      {/* SEVERE WARNING BANNER */}
+      {severeZoneCount > 0 && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            background: "#7F1D1D",
+            color: "white",
+            padding: "10px 20px",
+            textAlign: "center",
+            zIndex: 1000,
+            fontWeight: "bold",
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            gap: "12px",
+            boxShadow: "0 2px 10px rgba(0,0,0,0.3)",
+            animation: "fadeIn 0.5s ease-out"
+          }}
+        >
+          <style>
+            {`
+              @keyframes fadeIn {
+                from { opacity: 0; transform: translateY(-10px); }
+                to { opacity: 1; transform: translateY(0); }
+              }
+            `}
+          </style>
+          <span style={{ fontSize: "20px" }}>⚠</span>
+          <span>
+            SEVERE AQI DETECTED IN {severeZoneCount} ZONE{severeZoneCount > 1 ? "S" : ""}
+          </span>
+        </div>
+      )}
+
+      <div style={{ flex: 1, marginTop: severeZoneCount > 0 ? "40px" : "0" }}>
         {/* HEADER */}
         <div
           style={{
@@ -161,15 +290,96 @@ function Dashboard() {
           }}
         >
         <div>
-          <h1 style={{ margin: 0, fontSize: "26px", fontWeight: "600" }}>
-           PM2.5 Admin Pannel
-          </h1>
+          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+            <h1 style={{ margin: 0, fontSize: "26px", fontWeight: "600" }}>
+              PM2.5 Admin Pann
+            </h1>
+            <span
+              style={{
+                fontSize: "11px",
+                padding: "2px 8px",
+                background: "#F1F5F9",
+                color: "#64748B",
+                borderRadius: "999px",
+                fontWeight: "600",
+                textTransform: "uppercase",
+                letterSpacing: "0.5px",
+                border: "1px solid #E2E8F0"
+              }}
+            >
+              Simulation Mode
+            </span>
+          </div>
           <p style={{ margin: "6px 0 0", color: "#64748B" }}>
-            Real-time air quality monitoring
+            Real-time air quality monitoring Control Room
           </p>
         </div>
 
-        <div style={{ display: "flex", gap: "16px" }}>
+        <div style={{ display: "flex", gap: "16px", alignItems: "center" }}>
+          {/* Alert Sound Toggle */}
+          <button
+            onClick={() => setIsSoundEnabled(!isSoundEnabled)}
+            style={{
+              background: isSoundEnabled ? "#F1F5F9" : "white",
+              border: "1px solid #E2E8F0",
+              borderRadius: "8px",
+              padding: "8px 14px",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
+              color: isSoundEnabled ? "#0F172A" : "#94A3B8",
+              fontSize: "13px",
+              fontWeight: "600",
+              transition: "all 0.2s"
+            }}
+          >
+            <span>{isSoundEnabled ? "🔊" : "🔇"}</span>
+            <span>{isSoundEnabled ? "Alert Sound ON" : "Enable Alert Sound"}</span>
+          </button>
+
+          {/* Alert Badge */}
+          <div style={{ position: "relative" }}>
+            <button
+              onClick={() => setIsAlertPanelOpen(true)}
+              style={{
+                background: "white",
+                border: "1px solid #E2E8F0",
+                borderRadius: "8px",
+                padding: "8px 14px",
+                cursor: "pointer",
+                fontWeight: "600",
+                color: "#0F172A",
+                display: "flex",
+                alignItems: "center",
+                gap: "8px"
+              }}
+            >
+              Alerts
+              {unacknowledgedCount > 0 && (
+                <span
+                  style={{
+                    background: "#EF4444",
+                    color: "white",
+                    borderRadius: "50%",
+                    width: "20px",
+                    height: "20px",
+                    fontSize: "12px",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    position: "absolute",
+                    top: "-8px",
+                    right: "-8px",
+                    boxShadow: "0 0 0 2px white"
+                  }}
+                >
+                  {unacknowledgedCount > 99 ? "99+" : unacknowledgedCount}
+                </span>
+              )}
+            </button>
+          </div>
+
           <select
             value={selectedCity || ""}
             onChange={(e) => changeCity(e.target.value)}
@@ -314,6 +524,7 @@ function Dashboard() {
               nodes={nodes}
               viewMode={viewMode}
               city={selectedCity}
+              onZoneClick={handleZoneClickSound}
             />
           </div>
         </div>
@@ -455,9 +666,20 @@ function Dashboard() {
           Built with FastAPI + React • Simulation Engine v1.0
         </div>
       </div>
+
+      {/* ALERT PANEL */}
+      <AlertPanel 
+        isOpen={isAlertPanelOpen} 
+        onClose={() => setIsAlertPanelOpen(false)} 
+        onAlertAcknowledged={fetchAlertData}
+      />
+      
+      {/* SYSTEM STATUS BAR */}
+      <SystemStatusBar status={systemStatus} />
     </div>
   );
 }
 
+Dashboard.ErrorBoundary = ErrorBoundary;
 
 export default Dashboard;

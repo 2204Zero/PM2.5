@@ -1,5 +1,15 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 import Dashboard from "./pages/Dashboard";
+
+// --- Dashboard Error Boundary Wrapper ---
+function SafeDashboard() {
+  return (
+    <Dashboard.ErrorBoundary>
+      <Dashboard />
+    </Dashboard.ErrorBoundary>
+  );
+}
+// ----------------------------------------
 import ZoneDetail from "./pages/ZoneDetail";
 import Login from "./pages/Login";
 
@@ -27,7 +37,7 @@ function App() {
           path="/"
           element={
             <PrivateRoute>
-              <Dashboard />
+              <SafeDashboard />
             </PrivateRoute>
           }
         />

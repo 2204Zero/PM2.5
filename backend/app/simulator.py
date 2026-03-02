@@ -4,11 +4,12 @@ import random
 import datetime
 import requests
 import time
+from sqlalchemy import desc
 
 from app.config import DATA_MODE, REAL_FETCH_INTERVAL_SECONDS, CITY_NAME, CITIES
 from app.aqi_calculator import AQICalculator
 from app.database import SessionLocal
-from app.models import NodeReading, ZoneReading
+from app.models import NodeReading, ZoneReading, Alert
 
 
 class AQISimulator:
@@ -22,6 +23,11 @@ class AQISimulator:
         self.last_db_write = 0
         self.last_node_db_write = 0
         self.NODE_DB_INTERVAL = 300
+        
+        # Guard for alerts (10 minutes)
+        self.last_alert_time_per_zone = {}
+        # Track last AQI level to only trigger on crossing threshold upward
+        self.last_aqi_level_per_zone = {}
 
         # Load initial city
         city_config = CITIES.get(CITY_NAME.lower(), CITIES["delhi"])
@@ -37,6 +43,10 @@ class AQISimulator:
 
         self.aqi_engine = AQICalculator(standard="india")
 
+        # Production Realistic Simulation State
+        self.zone_profiles = self._assign_zone_profiles()
+        self.last_pm25_per_zone = {} # previous value for drift
+
         self.nodes = self._generate_nodes()
 
         self.node_history = {node["id"]: [] for node in self.nodes}
@@ -44,6 +54,31 @@ class AQISimulator:
 
         self.real_zone_cache = {}
         self.last_real_fetch = 0
+
+    # --------------------------------------------------
+    # Assign Realistic Zone Profiles
+    # --------------------------------------------------
+    def _assign_zone_profiles(self):
+        """
+        Assigns low, medium, or high pollution profile to each zone.
+        Distribution: 30% low, 40% medium, 30% high.
+        """
+        num_zones = self.rows * self.cols
+        profiles = {}
+        
+        # Determine counts
+        low_count = int(num_zones * 0.3)
+        high_count = int(num_zones * 0.3)
+        med_count = num_zones - low_count - high_count
+        
+        # Create pool and shuffle
+        pool = (["low"] * low_count) + (["medium"] * med_count) + (["high"] * high_count)
+        random.shuffle(pool)
+        
+        for z in range(num_zones):
+            profiles[z] = pool[z]
+            
+        return profiles
 
     # --------------------------------------------------
     # Generate structured nodes
@@ -108,9 +143,19 @@ class AQISimulator:
         )
         db = SessionLocal() if should_write_to_db else None
 
+        # Optimization: pre-calculate pollutants per zone to avoid massive random calls
+        zone_pollutants_map = {}
+        for z in range(self.rows * self.cols):
+            zone_pollutants_map[z] = self._simulate_pollutants_for_zone(z)
+
         for node in self.nodes:
-            pollutants = self._simulate_pollutants()
-            node.update(pollutants)
+            pollutants = zone_pollutants_map[node["zone"]]
+            # Add some tiny node-level variance (+/- 5%)
+            node_pollutants = {
+                k: v * random.uniform(0.95, 1.05) if isinstance(v, (int, float)) else v
+                for k, v in pollutants.items()
+            }
+            node.update(node_pollutants)
 
             if should_write_to_db:
                 node_entry = NodeReading(
@@ -278,25 +323,63 @@ class AQISimulator:
                 }
 
     # --------------------------------------------------
-    # Pollutant simulation
+    # Pollutant simulation (Refined Realistic)
     # --------------------------------------------------
-    def _simulate_pollutants(self):
-        current_hour = datetime.datetime.now().hour
-        base_pm = 40
-
-        if 7 <= current_hour <= 10 or 17 <= current_hour <= 21:
-            spike = random.randint(20, 80)
+    def _simulate_pollutants_for_zone(self, zone_id):
+        """
+        Simulates pollutants based on zone profile with mean reversion.
+        Eliminates saturation at 500 and ensures realistic distribution.
+        """
+        profile = self.zone_profiles.get(zone_id, "medium")
+        last_pm25 = self.last_pm25_per_zone.get(zone_id)
+        
+        # 1. Define Profile Bounds and Base Ranges
+        if profile == "low":
+            # LOW_PROFILE: base_range = (40, 80), min_bound = 30, max_bound = 100
+            base_min, base_max = 40, 80
+            min_bound, max_bound = 30, 100
+        elif profile == "high":
+            # HIGH_PROFILE: base_range = (150, 300), min_bound = 130, max_bound = 400
+            base_min, base_max = 150, 300
+            min_bound, max_bound = 130, 400
+        else: # medium
+            # MEDIUM_PROFILE: base_range = (80, 160), min_bound = 70, max_bound = 220
+            base_min, base_max = 80, 160
+            min_bound, max_bound = 70, 220
+            
+        # 2. Mean Reversion Logic
+        profile_base = (base_min + base_max) / 2
+        
+        if last_pm25 is None:
+            # First run, pick random in base range
+            current_pm25 = random.uniform(base_min, base_max)
         else:
-            spike = random.randint(-10, 20)
-
+            # drift = random.uniform(-8, 8)
+            # reversion_force = (previous - profile_base) * 0.05
+            drift = random.uniform(-8, 8)
+            reversion_force = (last_pm25 - profile_base) * 0.05
+            current_pm25 = last_pm25 + drift - reversion_force
+            
+        # 3. Time-of-day Factor (Traffic spikes)
+        current_hour = datetime.datetime.now().hour
+        if 7 <= current_hour <= 10 or 17 <= current_hour <= 21:
+            # Only apply within bounds
+            spike = random.uniform(5, 20)
+            current_pm25 += spike
+            
+        # 4. Strict Clamping within Profile Bounds
+        current_pm25 = max(min_bound, min(current_pm25, max_bound))
+        
+        self.last_pm25_per_zone[zone_id] = current_pm25
+        
         return {
-            "pm25": max(5, base_pm + spike),
-            "pm10": max(10, base_pm + spike + random.randint(0, 30)),
-            "no2": max(5, random.randint(20, 150)),
-            "co": round(random.uniform(0.5, 5.0), 2),
-            "o3": random.randint(10, 200),
-            "temperature": random.randint(20, 40),
-            "humidity": random.randint(30, 90)
+            "pm25": current_pm25,
+            "pm10": current_pm25 * 1.5 + random.uniform(0, 30),
+            "no2": random.randint(20, 120),
+            "co": round(random.uniform(0.5, 3.5), 2),
+            "o3": random.randint(10, 150),
+            "temperature": random.randint(22, 38),
+            "humidity": random.randint(40, 85)
         }
 
     # --------------------------------------------------
@@ -345,13 +428,66 @@ class AQISimulator:
                 "trend": trend
             }
 
-            #Keep in memory history (fast, always)
+            # Keep in memory history (fast, always)
             self.zone_history[zone_id].append(zone_record)
 
-            if len(self.zone_history[zone_id])>50:
-                self.zone_history[zone_id] = self.zone_history[zone_id]
+            if len(self.zone_history[zone_id]) > 50:
+                self.zone_history[zone_id] = self.zone_history[zone_id][-50:]
 
-            #Persist only if 5-minute interval passed
+            # --- Alert Engine Logic (Hardened) ---
+            level = self.aqi_engine.get_aqi_level(aqi_result["aqi"])
+            last_level = self.last_aqi_level_per_zone.get(zone_id)
+            
+            # Severity levels in order to check for upward crossing
+            severity_order = ["Good", "Satisfactory", "Moderate", "Poor", "Very Poor", "Severe"]
+            
+            is_new_severity = False
+            if last_level:
+                try:
+                    if severity_order.index(level) > severity_order.index(last_level):
+                        is_new_severity = True
+                except ValueError:
+                    is_new_severity = True
+            else:
+                is_new_severity = True
+
+            if level in ["Poor", "Very Poor", "Severe"] and is_new_severity:
+                alert_key = (zone_id, level)
+                
+                # DB Check for duplicate within 10 minutes (System Hardening)
+                alert_db = db if db else SessionLocal()
+                try:
+                    ten_mins_ago = datetime.datetime.now() - datetime.timedelta(minutes=10)
+                    existing_alert = alert_db.query(Alert).filter(
+                        Alert.zone_id == zone_id,
+                        Alert.level == level,
+                        Alert.created_at >= ten_mins_ago
+                    ).first()
+
+                    if not existing_alert:
+                        alert_msg = f"{level} AQI detected in Zone {zone_id}"
+                        alert_entry = Alert(
+                            zone_id=zone_id,
+                            aqi=aqi_result["aqi"],
+                            level=level,
+                            message=alert_msg
+                        )
+                        alert_db.add(alert_entry)
+                        alert_db.commit()
+                        self.last_alert_time_per_zone[alert_key] = current_time
+                        print(f"ALERT CREATED: Zone {zone_id} is {level} (AQI: {aqi_result['aqi']})")
+                except Exception as e:
+                    print(f"Error creating alert: {e}")
+                    alert_db.rollback()
+                finally:
+                    if not db:
+                        alert_db.close()
+            
+            # Always update last level to track crossings
+            self.last_aqi_level_per_zone[zone_id] = level
+            # -------------------------------------
+
+            # Persist only if 5-minute interval passed
             if should_write_to_db and db:
                 zone_entry = ZoneReading(
                     zone_id=zone_id,
