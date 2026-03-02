@@ -180,3 +180,19 @@ def get_current_city(current_user: User = Depends(get_current_user)):
 def list_cities(current_user: User = Depends(get_current_user)):
     from app.config import CITIES
     return {"cities": list(CITIES.keys())}
+
+
+# =====================================================
+# SIMULATION CONTROL (Unprotected)
+# =====================================================
+
+@router.post("/simulation/interval/{seconds}")
+def set_simulation_interval(seconds: int):
+    if seconds < 1 or seconds > 120:
+        raise HTTPException(
+            status_code=400,
+            detail="Interval must be between 1 and 120 seconds"
+        )
+
+    simulator.simulation_interval = seconds
+    return {"simulation_interval": simulator.simulation_interval}

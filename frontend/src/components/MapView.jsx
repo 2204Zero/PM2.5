@@ -18,6 +18,35 @@ function RecenterMap({ center }) {
   return null;
 }
 
+function InvalidateSizeOnResize() {
+  const map = useMap();
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    let timeoutId = null;
+
+    const handleResize = () => {
+      if (timeoutId) {
+        window.clearTimeout(timeoutId);
+      }
+      timeoutId = window.setTimeout(() => {
+        map.invalidateSize();
+      }, 100);
+    };
+
+    window.addEventListener("resize", handleResize);
+    return () => {
+      window.removeEventListener("resize", handleResize);
+      if (timeoutId) {
+        window.clearTimeout(timeoutId);
+      }
+    };
+  }, [map]);
+
+  return null;
+}
+
 function MapView({ zones, viewMode, city }) {
   const [mapCenter, setMapCenter] = useState([28.6139, 77.2090]);
 
@@ -56,6 +85,11 @@ function MapView({ zones, viewMode, city }) {
       <MapContainer
   center={mapCenter}
   zoom={12}
+  whenReady={(mapInstance) => {
+    setTimeout(() => {
+      mapInstance.target.invalidateSize();
+    }, 100);
+  }}
   style={{
     height: "500px",
     width: "100%",
@@ -63,6 +97,7 @@ function MapView({ zones, viewMode, city }) {
   }}
 >
         <RecenterMap center={mapCenter} />
+        <InvalidateSizeOnResize />
 
         {/* Modern clean tiles */}
      <TileLayer

@@ -18,6 +18,7 @@ class AQISimulator:
         self.cols = cols
         self.nodes_per_zone = nodes_per_zone
         self.num_nodes = rows * cols * nodes_per_zone
+        self.simulation_interval = 15  # default seconds
         self.last_db_write = 0
         self.last_node_db_write = 0
         self.NODE_DB_INTERVAL = 300

@@ -18,10 +18,10 @@ async def start_background_simulation():
 
 async def simulation_loop():
     from app.routes import simulator
-
+    print("Simulation loop started")
     while True:
         simulator.simulate()
-        await asyncio.sleep(60)  # run every 5 seconds
+        await asyncio.sleep(simulator.simulation_interval)
 
 
 app.add_middleware(
@@ -36,4 +36,4 @@ app.include_router(router)
 
 @app.get("/")
 def root():
-    return {"message": "Urban AQI Backend Running"}
+    return {"message": "PM2.5 Backend Running"}

@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import axios from "../axiosConfig";
 import MapView from "../components/MapView";
 import StatCard from "../pages/StatCard";
+import AnimatedNumber from "../components/AnimatedNumber";
 
 function Dashboard() {
   const [zones, setZones] = useState([]);
@@ -10,6 +11,7 @@ function Dashboard() {
   const [cities, setCities] = useState([]);
   const [selectedCity, setSelectedCity] = useState(null);
   const [viewMode, setViewMode] = useState("zone");
+  const [refreshInterval, setRefreshInterval] = useState(15000);
   const [isNarrow, setIsNarrow] = useState(
     typeof window !== "undefined" ? window.innerWidth < 1024 : false
   );
@@ -44,16 +46,32 @@ function Dashboard() {
 
   useEffect(() => {
     fetchCities();
+  }, []);
+
+  useEffect(() => {
+    console.log("Interval set to:", refreshInterval);
+
+    // fetch latest data immediately when interval changes
     fetchZones();
     fetchNodes();
 
     const interval = setInterval(() => {
       fetchZones();
       fetchNodes();
-    }, 15000);
+    }, refreshInterval);
 
     return () => clearInterval(interval);
-  }, []);
+  }, [refreshInterval]);
+
+  useEffect(() => {
+    (async () => {
+      await axios.post(`/simulation/interval/${refreshInterval / 1000}`);
+      console.log(
+        "Backend simulation interval set to:",
+        refreshInterval / 1000
+      );
+    })();
+  }, [refreshInterval]);
 
   useEffect(() => {
     const handleResize = () => {
@@ -215,7 +233,10 @@ function Dashboard() {
             marginBottom: "32px",
           }}
         >
-          <StatCard title="Average AQI" value={stats.avgAqi} />
+          <StatCard
+            title="Average AQI"
+            value={<AnimatedNumber value={Number(stats.avgAqi)} />}
+          />
           <StatCard
             title="Highest AQI Zone"
             value={
@@ -229,6 +250,43 @@ function Dashboard() {
           <StatCard title="Active Nodes" value={stats.totalNodes} />
         </div>
       )}
+
+      {/* SIMULATION SPEED CONTROL */}
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "flex-end",
+          alignItems: "center",
+          gap: "8px",
+          marginBottom: "16px",
+        }}
+      >
+        <span
+          style={{
+            fontSize: "13px",
+            color: "#64748B",
+          }}
+        >
+          Simulation Refresh Speed
+        </span>
+        <select
+          value={refreshInterval}
+          onChange={(e) => setRefreshInterval(Number(e.target.value))}
+          style={{
+            padding: "6px 10px",
+            borderRadius: "8px",
+            border: "1px solid #CBD5E1",
+            background: "white",
+            fontSize: "13px",
+            color: "#0F172A",
+          }}
+        >
+          <option value={5000}>Every 5 seconds</option>
+          <option value={15000}>Every 15 seconds</option>
+          <option value={30000}>Every 30 seconds</option>
+          <option value={60000}>Every 60 seconds</option>
+        </select>
+      </div>
 
       {/* MAIN LAYOUT: MAP + WORST ZONES PANEL */}
       <div
@@ -356,7 +414,7 @@ function Dashboard() {
                         lineHeight: 1.1,
                       }}
                     >
-                      {zone.aqi.toFixed(0)}{" "}
+                      <AnimatedNumber value={zone.aqi} />{" "}
                       <span
                         style={{
                           color: getTrendColor(zone.trend, zone.aqi),
