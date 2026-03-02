@@ -12,7 +12,7 @@ from app.auth import (
     get_db,
     get_current_user,
 )
-from app.models import User, Alert, NodeReading, ZoneReading
+from app.models import User, Alert, NodeReading, ZoneReading, Incident
 
 router = APIRouter()
 simulator = AQISimulator()
@@ -84,6 +84,21 @@ def get_live_nodes(current_user: User = Depends(get_current_user)):
 def get_zones_live(current_user: User = Depends(get_current_user)):
     summary = simulator.get_zone_summary()
     return {"zones": summary}
+
+
+@router.get("/zones/live-stats")
+def get_zones_live_stats(current_user: User = Depends(get_current_user)):
+    summary = simulator.get_zone_summary()
+    
+    total_zones = len(summary)
+    severe_zone_count = sum(1 for z in summary if z["aqi"] >= 400)
+    avg_aqi = sum(z["aqi"] for z in summary) / total_zones if total_zones > 0 else 0
+
+    return {
+        "total_zones": total_zones,
+        "severe_zone_count": severe_zone_count,
+        "average_aqi": round(avg_aqi, 1)
+    }
 
 
 # =====================================================
@@ -283,3 +298,40 @@ def get_system_status(
         "total_nodes": simulator.num_nodes,
         "refresh_interval": simulator.simulation_interval
     }
+
+
+# =====================================================
+# INCIDENT ROUTES (Protected)
+# =====================================================
+
+@router.get("/incidents/active")
+def get_active_incidents(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Return all active incidents with recommendations."""
+    incidents = db.query(Incident).filter(Incident.status == "Active").all()
+    
+    # Format recommendations for frontend
+    result = []
+    for inc in incidents:
+        result.append({
+            "id": inc.id,
+            "zone_id": inc.zone_id,
+            "severity_level": inc.severity_level,
+            "start_time": inc.start_time,
+            "recommendations": inc.recommendations.split("|") if inc.recommendations else [],
+            "predictive_warning": inc.predictive_warning
+        })
+    return {"incidents": result}
+
+
+@router.get("/incidents/resolved")
+def get_resolved_incidents(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Return latest 20 resolved incidents."""
+    incidents = db.query(Incident).filter(Incident.status == "Resolved")\
+        .order_by(Incident.start_time.desc()).limit(20).all()
+    return {"incidents": incidents}

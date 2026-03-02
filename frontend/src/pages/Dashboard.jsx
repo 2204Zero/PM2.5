@@ -7,6 +7,7 @@ import StatCard from "../pages/StatCard";
 import AnimatedNumber from "../components/AnimatedNumber";
 import AlertPanel from "../components/AlertPanel";
 import SystemStatusBar from "../components/SystemStatusBar";
+import IncidentPanel from "../components/IncidentPanel";
 
 // --- Error Boundary Component ---
 class ErrorBoundary extends React.Component {
@@ -52,8 +53,11 @@ function Dashboard() {
   const [isAlertPanelOpen, setIsAlertPanelOpen] = useState(false);
   const [unacknowledgedCount, setUnacknowledgedCount] = useState(0);
   const [severeZoneCount, setSevereZoneCount] = useState(0);
+  const [liveStats, setLiveStats] = useState(null);
   const [isSoundEnabled, setIsSoundEnabled] = useState(false);
   const [systemStatus, setSystemStatus] = useState(null);
+  const [activeIncidents, setActiveIncidents] = useState([]);
+  const [isIncidentPanelOpen, setIsIncidentPanelOpen] = useState(false);
   const prevSevereCount = useRef(0);
   const audioRef = useRef(null);
   // ---------------------------
@@ -81,16 +85,24 @@ function Dashboard() {
 
   const fetchAlertData = async () => {
     try {
-      // Get unacknowledged count and severe zone count
+      // Get unacknowledged count (Alert Badge only)
       const countRes = await axios.get("/alerts/unacknowledged/count");
       setUnacknowledgedCount(countRes.data.total_alerts);
-      setSevereZoneCount(countRes.data.severe_zone_count);
+      
+      // Get LIVE STATS (Banner and Stat Cards)
+      const statsRes = await axios.get("/zones/live-stats");
+      setLiveStats(statsRes.data);
+      setSevereZoneCount(statsRes.data.severe_zone_count);
+      
+      // Get active incidents
+      const incidentRes = await axios.get("/incidents/active");
+      setActiveIncidents(incidentRes.data.incidents);
       
       // Get system status
       const statusRes = await axios.get("/system/status");
       setSystemStatus(statusRes.data);
     } catch (err) {
-      console.error("Failed to fetch alert and status data:", err);
+      console.error("Failed to fetch alert, incident, and status data:", err);
     }
   };
 
@@ -242,6 +254,83 @@ function Dashboard() {
         preload="auto" 
       />
 
+      <style>
+        {`
+          @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+          }
+          
+          .main-grid {
+            display: grid;
+            grid-template-columns: 3fr 340px;
+            gap: 24px;
+            align-items: flex-start;
+            margin-bottom: 40px;
+          }
+
+          .kpi-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 20px;
+            margin-bottom: 32px;
+          }
+
+          .header-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 40px;
+            gap: 20px;
+          }
+
+          .header-controls {
+            display: flex;
+            gap: 16px;
+            align-items: center;
+            flex-wrap: wrap;
+          }
+
+          .map-wrapper {
+            background: white;
+            border-radius: 16px;
+            padding: 16px;
+            border: 1px solid #E2E8F0;
+            height: 520px;
+          }
+
+          @media (max-width: 1024px) {
+            .main-grid {
+              grid-template-columns: 1fr;
+            }
+            .header-container {
+              flex-direction: column;
+              align-items: flex-start;
+            }
+            .map-wrapper {
+              height: 380px;
+            }
+            .side-panel {
+              max-width: none !important;
+              width: 100%;
+            }
+          }
+
+          @media (max-width: 640px) {
+            .kpi-grid {
+              grid-template-columns: 1fr;
+            }
+            .header-controls {
+              width: 100%;
+            }
+            .header-controls > * {
+              flex: 1;
+              min-width: 120px;
+            }
+          }
+        `}
+      </style>
+
       {/* SEVERE WARNING BANNER */}
       {severeZoneCount > 0 && (
         <div
@@ -264,14 +353,6 @@ function Dashboard() {
             animation: "fadeIn 0.5s ease-out"
           }}
         >
-          <style>
-            {`
-              @keyframes fadeIn {
-                from { opacity: 0; transform: translateY(-10px); }
-                to { opacity: 1; transform: translateY(0); }
-              }
-            `}
-          </style>
           <span style={{ fontSize: "20px" }}>⚠</span>
           <span>
             SEVERE AQI DETECTED IN {severeZoneCount} ZONE{severeZoneCount > 1 ? "S" : ""}
@@ -281,14 +362,7 @@ function Dashboard() {
 
       <div style={{ flex: 1, marginTop: severeZoneCount > 0 ? "40px" : "0" }}>
         {/* HEADER */}
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            marginBottom: "40px",
-          }}
-        >
+        <div className="header-container">
         <div>
           <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
             <h1 style={{ margin: 0, fontSize: "26px", fontWeight: "600" }}>
@@ -315,7 +389,7 @@ function Dashboard() {
           </p>
         </div>
 
-        <div style={{ display: "flex", gap: "16px", alignItems: "center" }}>
+        <div className="header-controls">
           {/* Alert Sound Toggle */}
           <button
             onClick={() => setIsSoundEnabled(!isSoundEnabled)}
@@ -337,6 +411,47 @@ function Dashboard() {
             <span>{isSoundEnabled ? "🔊" : "🔇"}</span>
             <span>{isSoundEnabled ? "Alert Sound ON" : "Enable Alert Sound"}</span>
           </button>
+
+          {/* Incident Badge */}
+          {activeIncidents.length > 0 && (
+            <div style={{ position: "relative" }}>
+              <button
+                onClick={() => setIsIncidentPanelOpen(true)}
+                style={{
+                  background: "#7F1D1D",
+                  border: "1px solid #7F1D1D",
+                  borderRadius: "8px",
+                  padding: "8px 14px",
+                  cursor: "pointer",
+                  fontWeight: "700",
+                  color: "white",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px",
+                  boxShadow: "0 0 12px rgba(127, 29, 29, 0.4)"
+                }}
+              >
+                <span>🚨</span>
+                Incidents
+                <span
+                  style={{
+                    background: "white",
+                    color: "#7F1D1D",
+                    borderRadius: "50%",
+                    width: "20px",
+                    height: "20px",
+                    fontSize: "12px",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    boxShadow: "0 0 0 2px #7F1D1D"
+                  }}
+                >
+                  {activeIncidents.length}
+                </span>
+              </button>
+            </div>
+          )}
 
           {/* Alert Badge */}
           <div style={{ position: "relative" }}>
@@ -362,16 +477,18 @@ function Dashboard() {
                     background: "#EF4444",
                     color: "white",
                     borderRadius: "50%",
-                    width: "20px",
+                    minWidth: "20px",
                     height: "20px",
-                    fontSize: "12px",
+                    padding: "0 6px",
+                    fontSize: "11px",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
                     position: "absolute",
                     top: "-8px",
                     right: "-8px",
-                    boxShadow: "0 0 0 2px white"
+                    boxShadow: "0 0 0 2px white",
+                    fontWeight: "700"
                   }}
                 >
                   {unacknowledgedCount > 99 ? "99+" : unacknowledgedCount}
@@ -435,17 +552,10 @@ function Dashboard() {
 
       {/* STATS CARDS */}
       {stats && (
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(4, 1fr)",
-            gap: "20px",
-            marginBottom: "32px",
-          }}
-        >
+        <div className="kpi-grid">
           <StatCard
             title="Average AQI"
-            value={<AnimatedNumber value={Number(stats.avgAqi)} />}
+            value={<AnimatedNumber value={Number(liveStats?.average_aqi || stats.avgAqi)} />}
           />
           <StatCard
             title="Highest AQI Zone"
@@ -499,26 +609,10 @@ function Dashboard() {
       </div>
 
       {/* MAIN LAYOUT: MAP + WORST ZONES PANEL */}
-      <div
-        style={{
-          display: "flex",
-          flexDirection: isNarrow ? "column" : "row",
-          gap: "24px",
-          alignItems: "flex-start",
-          marginBottom: "40px",
-        }}
-      >
+      <div className="main-grid">
         {/* Map container wrapper */}
-        <div style={{ flex: 3 }}>
-          <div
-            style={{
-              background: "white",
-              borderRadius: "16px",
-              padding: "16px",
-              border: "1px solid #E2E8F0",
-              height: "100%",
-            }}
-          >
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div className="map-wrapper">
             <MapView
               zones={zones}
               nodes={nodes}
@@ -530,15 +624,10 @@ function Dashboard() {
         </div>
 
         {/* Right panel wrapper */}
-        <div
-          style={{
-            flex: 1,
-            maxWidth: "340px",
-          }}
-        >
+        <div className="side-panel" style={{ flex: 1 }}>
           <div
             style={{
-              maxHeight: "400px",
+              maxHeight: "520px",
               overflowY: "auto",
               display: "flex",
               flexDirection: "column",
@@ -561,11 +650,14 @@ function Dashboard() {
                     padding: "8px 10px",
                     textAlign: "left",
                     cursor: "pointer",
-                    height: "60px",
+                    height: zone.projected_severe ? "80px" : "60px",
                     display: "flex",
                     alignItems: "stretch",
                     gap: "10px",
                     boxShadow: "0 4px 10px rgba(15,23,42,0.04)",
+                    position: "relative",
+                    transition: "height 0.3s ease",
+                    borderLeft: zone.projected_severe ? "4px solid #F59E0B" : "none"
                   }}
                 >
                   {/* Left colored strip */}
@@ -593,9 +685,25 @@ function Dashboard() {
                         fontWeight: 600,
                         color: "#0F172A",
                         marginBottom: "2px",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "6px"
                       }}
                     >
                       Zone {zone.zone_id}
+                      {zone.projected_severe && (
+                        <span style={{
+                          fontSize: "9px",
+                          background: "#FEF3C7",
+                          color: "#92400E",
+                          padding: "1px 4px",
+                          borderRadius: "4px",
+                          fontWeight: "700",
+                          textTransform: "uppercase"
+                        }}>
+                          ⚠ Escalation Risk
+                        </span>
+                      )}
                     </div>
                     <div
                       style={{
@@ -606,6 +714,16 @@ function Dashboard() {
                       Dominant:{" "}
                       {zone.dominant_pollutant?.toUpperCase() || "-"}
                     </div>
+                    {zone.projected_severe && (
+                      <div style={{
+                        fontSize: "11px",
+                        color: "#B45309",
+                        fontWeight: "600",
+                        marginTop: "4px"
+                      }}>
+                        Projected Severe in ~{zone.projection_minutes} min
+                      </div>
+                    )}
                   </div>
 
                   {/* AQI + trend */}
@@ -672,6 +790,13 @@ function Dashboard() {
         isOpen={isAlertPanelOpen} 
         onClose={() => setIsAlertPanelOpen(false)} 
         onAlertAcknowledged={fetchAlertData}
+      />
+
+      {/* INCIDENT PANEL */}
+      <IncidentPanel 
+        incidents={activeIncidents}
+        onClose={() => setIsIncidentPanelOpen(false)}
+        isOpen={isIncidentPanelOpen}
       />
       
       {/* SYSTEM STATUS BAR */}

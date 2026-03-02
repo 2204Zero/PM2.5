@@ -84,3 +84,20 @@ class Alert(Base):
     message = Column(String)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     acknowledged = Column(Boolean, default=False)
+
+
+# -------------------------
+# Incident Table (NEW)
+# -------------------------
+class Incident(Base):
+    __tablename__ = "incidents"
+
+    id = Column(Integer, primary_key=True, index=True)
+    zone_id = Column(Integer, index=True)
+    severity_level = Column(String)  # Severe, Very Poor
+    start_time = Column(DateTime(timezone=True), server_default=func.now())
+    last_update = Column(DateTime(timezone=True), onupdate=func.now())
+    status = Column(String, default="Active")  # Active, Monitoring, Resolved
+    duration_minutes = Column(Integer, default=0)
+    recommendations = Column(String)  # JSON or Comma-separated list of actions
+    predictive_warning = Column(String)  # e.g., "Rising", "Stable", "Falling"
