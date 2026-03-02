@@ -292,7 +292,7 @@ function Dashboard() {
         <div>
           <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
             <h1 style={{ margin: 0, fontSize: "26px", fontWeight: "600" }}>
-              PM2.5 Admin Pann
+              PM2.5 Admin Pannel
             </h1>
             <span
               style={{
