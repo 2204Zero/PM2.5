@@ -10,6 +10,9 @@ function Dashboard() {
   const [cities, setCities] = useState([]);
   const [selectedCity, setSelectedCity] = useState(null);
   const [viewMode, setViewMode] = useState("zone");
+  const [isNarrow, setIsNarrow] = useState(
+    typeof window !== "undefined" ? window.innerWidth < 1024 : false
+  );
 
   const navigate = useNavigate();
 
@@ -52,6 +55,18 @@ function Dashboard() {
     return () => clearInterval(interval);
   }, []);
 
+  useEffect(() => {
+    const handleResize = () => {
+      if (typeof window !== "undefined") {
+        setIsNarrow(window.innerWidth < 1024);
+      }
+    };
+
+    handleResize();
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
   const getAQIColor = (aqi) => {
     if (aqi <= 50) return "#22C55E";
     if (aqi <= 100) return "#FACC15";
@@ -63,19 +78,30 @@ function Dashboard() {
   const getTrendArrow = (trend) => {
     if (trend === "rising") return "↑";
     if (trend === "falling") return "↓";
-    return "→";
+    return "•";
+  };
+
+  const getTrendColor = (trend, aqi) => {
+    if (trend === "rising") return "#EF4444"; // red
+    if (trend === "falling") return "#22C55E"; // green
+    if (trend === "stable") return "#9CA3AF"; // gray
+    return getAQIColor(aqi);
   };
 
   // 📊 Derived Stats
+  const worstZone = useMemo(() => {
+    if (!zones.length) return null;
+    return zones.reduce(
+      (prev, current) => (current.aqi > prev.aqi ? current : prev),
+      zones[0]
+    );
+  }, [zones]);
+
   const stats = useMemo(() => {
     if (!zones.length) return null;
 
     const avgAqi =
       zones.reduce((sum, z) => sum + z.aqi, 0) / zones.length;
-
-    const worstZone = zones.reduce((prev, current) =>
-      prev.aqi > current.aqi ? prev : current
-    );
 
     const risingCount = zones.filter(
       (z) => z.trend === "rising"
@@ -87,7 +113,13 @@ function Dashboard() {
       risingCount,
       totalNodes: nodes.length,
     };
-  }, [zones, nodes]);
+  }, [zones, nodes, worstZone]);
+
+  const worstZones = useMemo(() => {
+    return zones
+      .slice()
+      .sort((a, b) => b.aqi - a.aqi);
+  }, [zones]);
 
   return (
     <div
@@ -96,17 +128,20 @@ function Dashboard() {
         background: "#F8FAFC",
         minHeight: "100vh",
         fontFamily: "Inter, sans-serif",
+        display: "flex",
+        flexDirection: "column",
       }}
     >
-      {/* HEADER */}
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          marginBottom: "40px",
-        }}
-      >
+      <div style={{ flex: 1 }}>
+        {/* HEADER */}
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            marginBottom: "40px",
+          }}
+        >
         <div>
           <h1 style={{ margin: 0, fontSize: "26px", fontWeight: "600" }}>
            PM2.5 Admin Pannel
@@ -177,87 +212,190 @@ function Dashboard() {
             display: "grid",
             gridTemplateColumns: "repeat(4, 1fr)",
             gap: "20px",
-            marginBottom: "40px",
+            marginBottom: "32px",
           }}
         >
           <StatCard title="Average AQI" value={stats.avgAqi} />
-          <StatCard title="Worst Zone" value={`Zone ${stats.worstZone}`} />
-          <StatCard title="Rising Zones" value={stats.risingCount} />
+          <StatCard
+            title="Highest AQI Zone"
+            value={
+              worstZone ? `Zone ${worstZone.zone_id}` : "—"
+            }
+          />
+          <StatCard
+            title="Zones Trending Up"
+            value={stats.risingCount}
+          />
           <StatCard title="Active Nodes" value={stats.totalNodes} />
         </div>
       )}
 
-      {/* MAP */}
+      {/* MAIN LAYOUT: MAP + WORST ZONES PANEL */}
       <div
         style={{
-          background: "white",
-          borderRadius: "16px",
-          padding: "16px",
-          border: "1px solid #E2E8F0",
+          display: "flex",
+          flexDirection: isNarrow ? "column" : "row",
+          gap: "24px",
+          alignItems: "flex-start",
           marginBottom: "40px",
         }}
       >
-        <MapView
-          zones={zones}
-          nodes={nodes}
-          viewMode={viewMode}
-          city={selectedCity}
-        />
-      </div>
+        {/* Map container wrapper */}
+        <div style={{ flex: 3 }}>
+          <div
+            style={{
+              background: "white",
+              borderRadius: "16px",
+              padding: "16px",
+              border: "1px solid #E2E8F0",
+              height: "100%",
+            }}
+          >
+            <MapView
+              zones={zones}
+              nodes={nodes}
+              viewMode={viewMode}
+              city={selectedCity}
+            />
+          </div>
+        </div>
 
-      {/* ZONE CARDS */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
-          gap: "20px",
-        }}
-      >
-        {zones
-          .slice()
-          .sort((a, b) => b.aqi - a.aqi)
-          .map((zone) => {
-            const color = getAQIColor(zone.aqi);
+        {/* Right panel wrapper */}
+        <div
+          style={{
+            flex: 1,
+            maxWidth: "340px",
+          }}
+        >
+          <div
+            style={{
+              maxHeight: "400px",
+              overflowY: "auto",
+              display: "flex",
+              flexDirection: "column",
+              gap: "8px",
+            }}
+          >
+            {worstZones.map((zone) => {
+              const color = getAQIColor(zone.aqi);
+              const isWorst =
+                worstZone && zone.zone_id === worstZone.zone_id;
 
-            return (
-              <div
-                key={zone.zone_id}
-                onClick={() => navigate(`/zone/${zone.zone_id}`)}
-                style={{
-                  background: "white",
-                  padding: "20px",
-                  borderRadius: "14px",
-                  border: "1px solid #E2E8F0",
-                  cursor: "pointer",
-                  transition: "all 0.2s ease",
-                }}
-              >
-                <h3 style={{ marginTop: 0 }}>Zone {zone.zone_id}</h3>
-
-                <div
+              return (
+                <button
+                  key={zone.zone_id}
+                  onClick={() => navigate(`/zone/${zone.zone_id}`)}
                   style={{
-                    fontSize: "34px",
-                    fontWeight: "600",
-                    color: color,
+                    border: "none",
+                    background: isWorst ? "#F1F5F9" : "white",
+                    borderRadius: "12px",
+                    padding: "8px 10px",
+                    textAlign: "left",
+                    cursor: "pointer",
+                    height: "60px",
+                    display: "flex",
+                    alignItems: "stretch",
+                    gap: "10px",
+                    boxShadow: "0 4px 10px rgba(15,23,42,0.04)",
                   }}
                 >
-                  {zone.aqi.toFixed(0)} {getTrendArrow(zone.trend)}
-                </div>
+                  {/* Left colored strip */}
+                  <div
+                    style={{
+                      width: "5px",
+                      borderRadius: "999px",
+                      background: color,
+                      alignSelf: "stretch",
+                    }}
+                  />
 
-                <p style={{ color: "#64748B" }}>
-                  Dominant: {zone.dominant_pollutant?.toUpperCase()}
-                </p>
+                  {/* Text content */}
+                  <div
+                    style={{
+                      flex: 1,
+                      display: "flex",
+                      flexDirection: "column",
+                      justifyContent: "center",
+                    }}
+                  >
+                    <div
+                      style={{
+                        fontSize: "14px",
+                        fontWeight: 600,
+                        color: "#0F172A",
+                        marginBottom: "2px",
+                      }}
+                    >
+                      Zone {zone.zone_id}
+                    </div>
+                    <div
+                      style={{
+                        fontSize: "12px",
+                        color: "#64748B",
+                      }}
+                    >
+                      Dominant:{" "}
+                      {zone.dominant_pollutant?.toUpperCase() || "-"}
+                    </div>
+                  </div>
 
-                <div style={{ fontSize: "14px", marginTop: "10px" }}>
-                  <div>PM2.5: {zone.pm25.toFixed(1)}</div>
-                  <div>PM10: {zone.pm10.toFixed(1)}</div>
-                  <div>NO₂: {zone.no2.toFixed(1)}</div>
-                  <div>CO: {zone.co.toFixed(2)}</div>
-                  <div>O₃: {zone.o3.toFixed(1)}</div>
-                </div>
-              </div>
-            );
-          })}
+                  {/* AQI + trend */}
+                  <div
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      justifyContent: "center",
+                      alignItems: "flex-end",
+                    }}
+                  >
+                    <div
+                      style={{
+                        fontSize: "20px",
+                        fontWeight: 700,
+                        color: color,
+                        lineHeight: 1.1,
+                      }}
+                    >
+                      {zone.aqi.toFixed(0)}{" "}
+                      <span
+                        style={{
+                          color: getTrendColor(zone.trend, zone.aqi),
+                        }}
+                      >
+                        {getTrendArrow(zone.trend)}
+                      </span>
+                    </div>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* close flex:1 content wrapper */}
+      </div>
+
+      {/* FOOTER */}
+      <div
+        style={{
+          background: "#0F172A",
+          color: "#CBD5E1",
+          padding: "20px",
+          textAlign: "center",
+          marginTop: "60px",
+        }}
+      >
+        <div>PM2.5 • Real-time Air Quality Monitoring System</div>
+        <div
+          style={{
+            marginTop: "4px",
+            fontSize: "12px",
+            color: "#94A3B8",
+          }}
+        >
+          Built with FastAPI + React • Simulation Engine v1.0
+        </div>
       </div>
     </div>
   );

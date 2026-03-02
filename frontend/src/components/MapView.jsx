@@ -49,7 +49,8 @@ function MapView({ zones, viewMode, city }) {
     <div
       style={{
         borderRadius: "16px",
-        overflow: "hidden"
+        overflow: "hidden",
+        boxShadow: "0 10px 30px rgba(0,0,0,0.15)"
       }}
     >
       <MapContainer
