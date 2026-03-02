@@ -9,26 +9,22 @@ import {
 } from "react-leaflet";
 import HeatmapLayer from "./HeatmapLayer";
 
-// Helper component to recenter map dynamically
+// Recenter helper
 function RecenterMap({ center }) {
   const map = useMap();
   useEffect(() => {
-    map.setView(center, 12);
+    map.setView(center, 12, { animate: true });
   }, [center, map]);
   return null;
 }
 
-function MapView({ zones, nodes, viewMode, city }) {
-  const [mode, setMode] = useState("heatmap");
-  const [mapCenter, setMapCenter] = useState([28.6139, 77.2090]); // default fallback
+function MapView({ zones, viewMode, city }) {
+  const [mapCenter, setMapCenter] = useState([28.6139, 77.2090]);
 
-  // Fetch city center from backend
   useEffect(() => {
     const fetchCityCenter = async () => {
       try {
-        const res = await axios.get(
-          "http://127.0.0.1:8000/city/current"
-        );
+        const res = await axios.get("/city/current");
         setMapCenter([
           res.data.city_center_lat,
           res.data.city_center_lon
@@ -42,63 +38,67 @@ function MapView({ zones, nodes, viewMode, city }) {
   }, [city]);
 
   const getAQIColor = (aqi) => {
-    if (aqi <= 50) return "#16a34a";
-    if (aqi <= 100) return "#84cc16";
-    if (aqi <= 200) return "#f59e0b";
-    if (aqi <= 300) return "#ef4444";
-    if (aqi <= 400) return "#7c2d12";
-    return "#4b0000";
+    if (aqi <= 50) return "#22C55E";
+    if (aqi <= 100) return "#FACC15";
+    if (aqi <= 200) return "#F97316";
+    if (aqi <= 300) return "#EF4444";
+    return "#7F1D1D";
   };
 
   return (
-    <div>
-      <div style={{ marginBottom: "15px" }}>
-        <button
-          onClick={() => setMode("heatmap")}
-          style={{ marginRight: "10px" }}
-        >
-          Heatmap
-        </button>
-        <button onClick={() => setMode("zones")}>
-          Zone View
-        </button>
-      </div>
-
+    <div
+      style={{
+        borderRadius: "16px",
+        overflow: "hidden"
+      }}
+    >
       <MapContainer
-        center={mapCenter}
-        zoom={12}
-        style={{
-          height: "500px",
-          width: "100%",
-          borderRadius: "12px"
-        }}
-      >
+  center={mapCenter}
+  zoom={12}
+  style={{
+    height: "500px",
+    width: "100%",
+    filter: "brightness(0.75) contrast(1.1)"
+  }}
+>
         <RecenterMap center={mapCenter} />
 
-        <TileLayer
-          attribution="© OpenStreetMap contributors"
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-        />
+        {/* Modern clean tiles */}
+     <TileLayer
+  url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+/>
+<TileLayer
+  url="https://services.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}"
+/>
 
-        {mode === "heatmap" && <HeatmapLayer zones={zones} />}
+        {/* Heatmap Mode */}
+        {viewMode === "heatmap" && (
+          <HeatmapLayer zones={zones} />
+        )}
 
-        {mode === "zones" &&
+        {/* Zone Marker Mode */}
+        {viewMode === "zone" &&
           zones
-            .filter(zone => zone.latitude && zone.longitude)
+            .filter((zone) => zone.latitude && zone.longitude)
             .map((zone) => (
               <CircleMarker
                 key={zone.zone_id}
                 center={[zone.latitude, zone.longitude]}
-                radius={14}
+                radius={16}
                 fillColor={getAQIColor(zone.aqi)}
-                color="#000"
-                weight={1}
-                fillOpacity={0.85}
+                color="#FFFFFF"
+                weight={2}
+                fillOpacity={0.9}
               >
                 <Popup>
-                  <strong>Zone {zone.zone_id}</strong><br />
-                  AQI: {zone.aqi}<br />
-                  Dominant: {zone.dominant_pollutant?.toUpperCase()}
+                  <div style={{ fontSize: "14px" }}>
+                    <strong>Zone {zone.zone_id}</strong>
+                    <br />
+                    AQI: {zone.aqi}
+                    <br />
+                    Dominant:{" "}
+                    {zone.dominant_pollutant?.toUpperCase()}
+                  </div>
                 </Popup>
               </CircleMarker>
             ))}

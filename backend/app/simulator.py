@@ -19,6 +19,8 @@ class AQISimulator:
         self.nodes_per_zone = nodes_per_zone
         self.num_nodes = rows * cols * nodes_per_zone
         self.last_db_write = 0
+        self.last_node_db_write = 0
+        self.NODE_DB_INTERVAL = 300
 
         # Load initial city
         city_config = CITIES.get(CITY_NAME.lower(), CITIES["delhi"])
@@ -99,27 +101,28 @@ class AQISimulator:
     def _simulate_fake_mode(self):
 
         timestamp = datetime.datetime.now().isoformat()
+        current_time = time.time()
+        should_write_to_db = (
+            current_time - self.last_node_db_write >= self.NODE_DB_INTERVAL
+        )
+        db = SessionLocal() if should_write_to_db else None
 
         for node in self.nodes:
             pollutants = self._simulate_pollutants()
             node.update(pollutants)
 
-            db = SessionLocal()
-
-            node_entry = NodeReading(
-                node_id=node["id"],
-                pm25=node["pm25"],
-                pm10=node["pm10"],
-                no2=node["no2"],
-                co=node["co"],
-                o3=node["o3"],
-                temperature=node.get("temperature"),
-                humidity=node.get("humidity")
-            )
-
-            db.add(node_entry)
-            db.commit()
-            db.close()
+            if should_write_to_db:
+                node_entry = NodeReading(
+                    node_id=node["id"],
+                    pm25=node["pm25"],
+                    pm10=node["pm10"],
+                    no2=node["no2"],
+                    co=node["co"],
+                    o3=node["o3"],
+                    temperature=node.get("temperature"),
+                    humidity=node.get("humidity")
+                )
+                db.add(node_entry)
 
             self.node_history[node["id"]].append({
                 "timestamp": timestamp,
@@ -128,6 +131,16 @@ class AQISimulator:
 
             if len(self.node_history[node["id"]]) > 50:
                 self.node_history[node["id"]] = self.node_history[node["id"]][-50:]
+
+        if should_write_to_db and db:
+            try:
+                db.commit()
+                self.last_node_db_write = current_time
+                print(f"Node batch write executed at {datetime.datetime.now().isoformat()}")
+            except Exception:
+                raise
+            finally:
+                db.close()
 
         self._update_zone_history(timestamp)
         return self.nodes
@@ -144,6 +157,10 @@ class AQISimulator:
             self.last_real_fetch = current_time
 
         timestamp = datetime.datetime.now().isoformat()
+        should_write_to_db = (
+            current_time - self.last_node_db_write >= self.NODE_DB_INTERVAL
+        )
+        db = SessionLocal() if should_write_to_db else None
 
         for node in self.nodes:
 
@@ -168,22 +185,18 @@ class AQISimulator:
                 "humidity": random.randint(30, 90)
             })
 
-            db = SessionLocal()
-
-            node_entry = NodeReading(
-                node_id=node["id"],
-                pm25=node["pm25"],
-                pm10=node["pm10"],
-                no2=node["no2"],
-                co=node["co"],
-                o3=node["o3"],
-                temperature=node.get("temperature"),
-                humidity=node.get("humidity")
-            )
-
-            db.add(node_entry)
-            db.commit()
-            db.close()
+            if should_write_to_db:
+                node_entry = NodeReading(
+                    node_id=node["id"],
+                    pm25=node["pm25"],
+                    pm10=node["pm10"],
+                    no2=node["no2"],
+                    co=node["co"],
+                    o3=node["o3"],
+                    temperature=node.get("temperature"),
+                    humidity=node.get("humidity")
+                )
+                db.add(node_entry)
 
             self.node_history[node["id"]].append({
                 "timestamp": timestamp,
@@ -196,6 +209,16 @@ class AQISimulator:
 
             if len(self.node_history[node["id"]]) > 50:
                 self.node_history[node["id"]] = self.node_history[node["id"]][-50:]
+
+        if should_write_to_db and db:
+            try:
+                db.commit()
+                self.last_node_db_write = current_time
+                print(f"Node batch write executed at {datetime.datetime.now().isoformat()}")
+            except Exception:
+                raise
+            finally:
+                db.close()
 
         self._update_zone_history(timestamp)
         return self.nodes
@@ -285,13 +308,13 @@ class AQISimulator:
         for node in self.nodes:
             zone_pollutants[node["zone"]].append(node)
 
-        #Track whether we should persisr to DB
         current_time = time.time()
-        should_write_to_db = current_time - self.last_db_write
-
-        db = None
-        if should_write_to_db:
-            db = SessionLocal()
+        
+        #5 minute guard
+        should_write_to_db = (
+            current_time - self.last_db_write >= 300
+        )
+        db = SessionLocal() if should_write_to_db else None
 
         for zone_id, nodes in zone_pollutants.items():
             
@@ -328,7 +351,7 @@ class AQISimulator:
                 self.zone_history[zone_id] = self.zone_history[zone_id]
 
             #Persist only if 5-minute interval passed
-            if should_write_to_db:
+            if should_write_to_db and db:
                 zone_entry = ZoneReading(
                     zone_id=zone_id,
                     aqi=zone_record["aqi"],
@@ -342,11 +365,15 @@ class AQISimulator:
                     )
                 db.add(zone_entry)
 
-            if should_write_to_db and db:
+        if should_write_to_db and db:
+            try:
                 db.commit()
-                db.close()
                 self.last_db_write = current_time
-            
+                print(f"Zone batch write executed at {datetime.datetime.now().isoformat()}")
+            except Exception:
+                raise
+            finally:
+                db.close()
 
     # --------------------------------------------------
     # Trend detection
@@ -400,6 +427,22 @@ class AQISimulator:
 
     def get_zone_history(self, zone_id):
         return self.zone_history.get(zone_id, [])
+
+    # --------------------------------------------------
+    # Cleanup old readings
+    # --------------------------------------------------
+    def cleanup_old_data(self, days=7):
+        """Delete node_readings and zone_readings older than the given number of days."""
+        cutoff = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=days)
+        db = SessionLocal()
+        try:
+            db.query(NodeReading).filter(NodeReading.timestamp < cutoff).delete()
+            db.query(ZoneReading).filter(ZoneReading.timestamp < cutoff).delete()
+            db.commit()
+        except Exception:
+            raise
+        finally:
+            db.close()
 
     # --------------------------------------------------
     # Change city dynamically

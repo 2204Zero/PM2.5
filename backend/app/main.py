@@ -21,7 +21,7 @@ async def simulation_loop():
 
     while True:
         simulator.simulate()
-        await asyncio.sleep(5)  # run every 5 seconds
+        await asyncio.sleep(60)  # run every 5 seconds
 
 
 app.add_middleware(

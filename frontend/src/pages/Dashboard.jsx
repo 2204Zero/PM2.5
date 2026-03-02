@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "../axiosConfig";
 import MapView from "../components/MapView";
+import StatCard from "../pages/StatCard";
 
 function Dashboard() {
   const [zones, setZones] = useState([]);
@@ -23,16 +24,16 @@ function Dashboard() {
   };
 
   const fetchCities = async () => {
-  const res = await axios.get("/city/list");
-  setCities(res.data.cities);
+    const res = await axios.get("/city/list");
+    setCities(res.data.cities);
 
-  if (!selectedCity && res.data.cities.length > 0) {
-    setSelectedCity(res.data.cities[0]);
-  }
-};
+    if (!selectedCity && res.data.cities.length > 0) {
+      setSelectedCity(res.data.cities[0]);
+    }
+  };
 
   const changeCity = async (city) => {
-    await axios.post(`http://127.0.0.1:8000/city/set/${city}`);
+    await axios.post(`/city/set/${city}`);
     setSelectedCity(city);
     await fetchZones();
     await fetchNodes();
@@ -46,18 +47,17 @@ function Dashboard() {
     const interval = setInterval(() => {
       fetchZones();
       fetchNodes();
-    }, 3000);
+    }, 15000);
 
     return () => clearInterval(interval);
   }, []);
 
   const getAQIColor = (aqi) => {
-    if (aqi <= 50) return "#16a34a";
-    if (aqi <= 100) return "#84cc16";
-    if (aqi <= 200) return "#f59e0b";
-    if (aqi <= 300) return "#ef4444";
-    if (aqi <= 400) return "#7c2d12";
-    return "#4b0000";
+    if (aqi <= 50) return "#22C55E";
+    if (aqi <= 100) return "#FACC15";
+    if (aqi <= 200) return "#F97316";
+    if (aqi <= 300) return "#EF4444";
+    return "#7F1D1D";
   };
 
   const getTrendArrow = (trend) => {
@@ -66,68 +66,148 @@ function Dashboard() {
     return "→";
   };
 
+  // 📊 Derived Stats
+  const stats = useMemo(() => {
+    if (!zones.length) return null;
+
+    const avgAqi =
+      zones.reduce((sum, z) => sum + z.aqi, 0) / zones.length;
+
+    const worstZone = zones.reduce((prev, current) =>
+      prev.aqi > current.aqi ? prev : current
+    );
+
+    const risingCount = zones.filter(
+      (z) => z.trend === "rising"
+    ).length;
+
+    return {
+      avgAqi: avgAqi.toFixed(0),
+      worstZone: worstZone.zone_id,
+      risingCount,
+      totalNodes: nodes.length,
+    };
+  }, [zones, nodes]);
+
   return (
-    <div style={{ padding: "40px", fontFamily: "Segoe UI" }}>
-      <h1>PM2.5 Admin Pannel</h1>
+    <div
+      style={{
+        padding: "40px",
+        background: "#F8FAFC",
+        minHeight: "100vh",
+        fontFamily: "Inter, sans-serif",
+      }}
+    >
+      {/* HEADER */}
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          marginBottom: "40px",
+        }}
+      >
+        <div>
+          <h1 style={{ margin: 0, fontSize: "26px", fontWeight: "600" }}>
+           PM2.5 Admin Pannel
+          </h1>
+          <p style={{ margin: "6px 0 0", color: "#64748B" }}>
+            Real-time air quality monitoring
+          </p>
+        </div>
 
-      {/* CITY SELECTOR */}
-      <div style={{ marginTop: "20px", marginBottom: "20px" }}>
-        <label style={{ marginRight: "10px", fontWeight: "600" }}>
-          Select City:
-        </label>
+        <div style={{ display: "flex", gap: "16px" }}>
+          <select
+            value={selectedCity || ""}
+            onChange={(e) => changeCity(e.target.value)}
+            style={{
+              padding: "8px 14px",
+              borderRadius: "8px",
+              border: "1px solid #E2E8F0",
+              background: "white",
+            }}
+          >
+            {cities.map((city) => (
+              <option key={city} value={city}>
+                {city.toUpperCase()}
+              </option>
+            ))}
+          </select>
 
-        <select
-          value={selectedCity || ""}
-          onChange={(e) => changeCity(e.target.value)}
-          style={{ padding: "6px 10px" }}
-        >
-          {cities.map((city) => (
-            <option key={city} value={city}>
-              {city.toUpperCase()}
-            </option>
-          ))}
-        </select>
+          <div
+            style={{
+              display: "flex",
+              border: "1px solid #E2E8F0",
+              borderRadius: "8px",
+              overflow: "hidden",
+            }}
+          >
+            <button
+              onClick={() => setViewMode("zone")}
+              style={{
+                padding: "8px 14px",
+                border: "none",
+                background: viewMode === "zone" ? "#0F172A" : "white",
+                color: viewMode === "zone" ? "white" : "#0F172A",
+                cursor: "pointer",
+              }}
+            >
+              Zone
+            </button>
+            <button
+              onClick={() => setViewMode("heatmap")}
+              style={{
+                padding: "8px 14px",
+                border: "none",
+                background: viewMode === "heatmap" ? "#0F172A" : "white",
+                color: viewMode === "heatmap" ? "white" : "#0F172A",
+                cursor: "pointer",
+              }}
+            >
+              Heatmap
+            </button>
+          </div>
+        </div>
       </div>
 
-      {/* VIEW TOGGLE */}
-      <div style={{ marginBottom: "20px" }}>
-        <button
-          onClick={() => setViewMode("zone")}
+      {/* STATS CARDS */}
+      {stats && (
+        <div
           style={{
-            marginRight: "10px",
-            padding: "8px 16px",
-            background: viewMode === "zone" ? "#111" : "#e5e7eb",
-            color: viewMode === "zone" ? "white" : "black",
-            border: "none",
-            borderRadius: "6px",
-            cursor: "pointer"
+            display: "grid",
+            gridTemplateColumns: "repeat(4, 1fr)",
+            gap: "20px",
+            marginBottom: "40px",
           }}
         >
-          Zone View
-        </button>
-
-        <button
-          onClick={() => setViewMode("heatmap")}
-          style={{
-            padding: "8px 16px",
-            background: viewMode === "heatmap" ? "#111" : "#e5e7eb",
-            color: viewMode === "heatmap" ? "white" : "black",
-            border: "none",
-            borderRadius: "6px",
-            cursor: "pointer"
-          }}
-        >
-          Heatmap (PM2.5)
-        </button>
-      </div>
+          <StatCard title="Average AQI" value={stats.avgAqi} />
+          <StatCard title="Worst Zone" value={`Zone ${stats.worstZone}`} />
+          <StatCard title="Rising Zones" value={stats.risingCount} />
+          <StatCard title="Active Nodes" value={stats.totalNodes} />
+        </div>
+      )}
 
       {/* MAP */}
-      <MapView zones={zones} nodes={nodes} viewMode={viewMode} city={selectedCity} />
+      <div
+        style={{
+          background: "white",
+          borderRadius: "16px",
+          padding: "16px",
+          border: "1px solid #E2E8F0",
+          marginBottom: "40px",
+        }}
+      >
+        <MapView
+          zones={zones}
+          nodes={nodes}
+          viewMode={viewMode}
+          city={selectedCity}
+        />
+      </div>
 
       {/* ZONE CARDS */}
       <div
         style={{
-          marginTop: "40px",
           display: "grid",
           gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
           gap: "20px",
@@ -146,25 +226,25 @@ function Dashboard() {
                 style={{
                   background: "white",
                   padding: "20px",
-                  borderRadius: "12px",
-                  boxShadow: "0 4px 12px rgba(0,0,0,0.05)",
-                  borderTop: `6px solid ${color}`,
+                  borderRadius: "14px",
+                  border: "1px solid #E2E8F0",
                   cursor: "pointer",
+                  transition: "all 0.2s ease",
                 }}
               >
-                <h3>Zone {zone.zone_id}</h3>
+                <h3 style={{ marginTop: 0 }}>Zone {zone.zone_id}</h3>
 
                 <div
                   style={{
-                    fontSize: "36px",
-                    fontWeight: "bold",
+                    fontSize: "34px",
+                    fontWeight: "600",
                     color: color,
                   }}
                 >
                   {zone.aqi.toFixed(0)} {getTrendArrow(zone.trend)}
                 </div>
 
-                <p style={{ fontWeight: "600" }}>
+                <p style={{ color: "#64748B" }}>
                   Dominant: {zone.dominant_pollutant?.toUpperCase()}
                 </p>
 
@@ -182,5 +262,6 @@ function Dashboard() {
     </div>
   );
 }
+
 
 export default Dashboard;

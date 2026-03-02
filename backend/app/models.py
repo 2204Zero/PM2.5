@@ -21,7 +21,7 @@ class NodeReading(Base):
     temperature = Column(Float)
     humidity = Column(Float)
 
-    timestamp = Column(DateTime(timezone=True), server_default=func.now())
+    timestamp = Column(DateTime(timezone=True), server_default=func.now(), index=True)
 
 
 # -------------------------
@@ -44,7 +44,7 @@ class ZoneReading(Base):
 
     trend = Column(String)
 
-    timestamp = Column(DateTime(timezone=True), server_default=func.now())
+    timestamp = Column(DateTime(timezone=True), server_default=func.now(), index=True)
 
 
 # -------------------------
