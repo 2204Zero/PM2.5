@@ -12,6 +12,7 @@ function SafeDashboard() {
 // ----------------------------------------
 import ZoneDetail from "./pages/ZoneDetail";
 import Login from "./pages/Login";
+import NetworkSimulation from "./pages/NetworkSimulation";
 
 // 🔐 Route Protection Component (Session-based)
 function PrivateRoute({ children }) {
@@ -47,6 +48,15 @@ function App() {
           element={
             <PrivateRoute>
               <ZoneDetail />
+            </PrivateRoute>
+          }
+        />
+
+        <Route
+          path="/network"
+          element={
+            <PrivateRoute>
+              <NetworkSimulation />
             </PrivateRoute>
           }
         />

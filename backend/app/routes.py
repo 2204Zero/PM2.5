@@ -12,6 +12,7 @@ from app.auth import (
     get_current_user,
 )
 from app.models import User, Alert, NodeReading, ZoneReading, Incident
+from app.network_simulator import network_engine
 
 router = APIRouter()
 
@@ -334,3 +335,20 @@ def get_resolved_incidents(
     incidents = db.query(Incident).filter(Incident.status == "Resolved")\
         .order_by(Incident.start_time.desc()).limit(20).all()
     return {"incidents": incidents}
+
+
+@router.post("/network/start")
+def start_network():
+    network_engine.start()
+    return {"status": "started"}
+
+
+@router.post("/network/stop")
+def stop_network():
+    network_engine.stop()
+    return {"status": "stopped"}
+
+
+@router.get("/network/status")
+def network_status():
+    return network_engine.get_status()

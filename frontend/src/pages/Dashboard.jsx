@@ -548,6 +548,20 @@ function Dashboard() {
               Heatmap
             </button>
           </div>
+          <button 
+            onClick={() => navigate("/network")} 
+            style={{ 
+              padding: "8px 16px", 
+              background: "#111827", 
+              color: "white", 
+              border: "none", 
+              borderRadius: "6px", 
+              cursor: "pointer", 
+              marginLeft: "10px" 
+            }} 
+          > 
+            Network Simulation 
+          </button>
         </div>
       </div>
 
