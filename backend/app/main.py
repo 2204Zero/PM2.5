@@ -5,12 +5,15 @@ from app.database import engine
 from app.models import Base
 from fastapi.middleware.cors import CORSMiddleware
 from app.simulator import AQISimulator
+from app.auth import router as auth_router
 
 app = FastAPI(
     title="Urban AQI Intelligence API",
     version="0.1.0"
 )
 Base.metadata.create_all(bind=engine)
+
+app.include_router(auth_router)
 
 simulator = AQISimulator()
 app.state.simulator = simulator
