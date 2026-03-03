@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import axios from "../axiosConfig";
+import instance from "../axiosConfig";
 
 function Login() {
   const [username, setUsername] = useState("");
@@ -19,7 +19,7 @@ function Login() {
       formData.append("username", username);
       formData.append("password", password);
 
-      const response = await axios.post(
+      const response = await instance.post(
         "/auth/login",
         formData,
         {
