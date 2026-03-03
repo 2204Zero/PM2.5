@@ -1,6 +1,0 @@
-{
-    "routes":[
-        {"handel":"filesystem"},
-        {"src":"/.*","dest":"/"}
-    ]
-}
