@@ -1,8 +1,6 @@
 {
-    "rewrite": [
-        {
-            "source": "/(.*)",
-            "destination": "/"
-        }
+    "routes":[
+        {"handel":"filesystem"},
+        {"src":"/.*","dest":"/"}
     ]
 }
