@@ -44,7 +44,7 @@ function Dashboard() {
   const [cities, setCities] = useState([]);
   const [selectedCity, setSelectedCity] = useState(null);
   const [viewMode, setViewMode] = useState("zone");
-  const [refreshInterval, setRefreshInterval] = useState(15000);
+  const [backendInterval, setBackendInterval] = useState(5); // Backend simulation speed in seconds
   const [isNarrow, setIsNarrow] = useState(
     typeof window !== "undefined" ? window.innerWidth < 1024 : false
   );
@@ -143,30 +143,30 @@ function Dashboard() {
     return () => clearInterval(interval);
   }, [isSoundEnabled]);
 
+  // Main Data Polling (Fixed 5s for Control Room responsiveness)
   useEffect(() => {
-    console.log("Interval set to:", refreshInterval);
-
-    // fetch latest data immediately when interval changes
+    // Initial fetch
     fetchZones();
     fetchNodes();
 
     const interval = setInterval(() => {
       fetchZones();
       fetchNodes();
-    }, refreshInterval);
+    }, 5000);
 
     return () => clearInterval(interval);
-  }, [refreshInterval]);
+  }, []);
 
-  useEffect(() => {
-    (async () => {
-      await axios.post(`/simulation/interval/${refreshInterval / 1000}`);
-      console.log(
-        "Backend simulation interval set to:",
-        refreshInterval / 1000
-      );
-    })();
-  }, [refreshInterval]);
+  // Update backend simulation interval when changed
+  const handleSimulationIntervalChange = async (seconds) => {
+    setBackendInterval(seconds);
+    try {
+      await axios.post(`/simulation/interval/${seconds}`);
+      console.log("Backend simulation interval set to:", seconds);
+    } catch (err) {
+      console.error("Failed to set simulation interval:", err);
+    }
+  };
 
   useEffect(() => {
     const handleResize = () => {
@@ -587,11 +587,11 @@ function Dashboard() {
             color: "#64748B",
           }}
         >
-          Simulation Refresh Speed
+          Simulation Step (Backend)
         </span>
         <select
-          value={refreshInterval}
-          onChange={(e) => setRefreshInterval(Number(e.target.value))}
+          value={backendInterval}
+          onChange={(e) => handleSimulationIntervalChange(Number(e.target.value))}
           style={{
             padding: "6px 10px",
             borderRadius: "8px",
@@ -601,10 +601,12 @@ function Dashboard() {
             color: "#0F172A",
           }}
         >
-          <option value={5000}>Every 5 seconds</option>
-          <option value={15000}>Every 15 seconds</option>
-          <option value={30000}>Every 30 seconds</option>
-          <option value={60000}>Every 60 seconds</option>
+          <option value={1}>Hyper-Speed (1s)</option>
+          <option value={2}>Fast (2s)</option>
+          <option value={5}>Standard (5s)</option>
+          <option value={15}>Slow (15s)</option>
+          <option value={30}>Audit Mode (30s)</option>
+          <option value={60}>Real-Time (60s)</option>
         </select>
       </div>
 

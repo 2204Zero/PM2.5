@@ -1,10 +1,9 @@
 import numpy as np
 from sklearn.linear_model import LinearRegression
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Request
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 
-from app.simulator import AQISimulator
 from app.auth import (
     hash_password,
     verify_password,
@@ -15,7 +14,7 @@ from app.auth import (
 from app.models import User, Alert, NodeReading, ZoneReading, Incident
 
 router = APIRouter()
-simulator = AQISimulator()
+
 
 # =====================================================
 # AUTH ROUTES
@@ -76,18 +75,21 @@ def health_check():
 # =====================================================
 
 @router.get("/nodes/live")
-def get_live_nodes(current_user: User = Depends(get_current_user)):
+def get_live_nodes(request: Request, current_user: User = Depends(get_current_user)):
+    simulator = request.app.state.simulator
     return {"nodes": simulator.nodes}
 
 
 @router.get("/zones/live")
-def get_zones_live(current_user: User = Depends(get_current_user)):
+def get_zones_live(request: Request, current_user: User = Depends(get_current_user)):
+    simulator = request.app.state.simulator
     summary = simulator.get_zone_summary()
     return {"zones": summary}
 
 
 @router.get("/zones/live-stats")
-def get_zones_live_stats(current_user: User = Depends(get_current_user)):
+def get_zones_live_stats(request: Request, current_user: User = Depends(get_current_user)):
+    simulator = request.app.state.simulator
     summary = simulator.get_zone_summary()
     
     total_zones = len(summary)
@@ -108,8 +110,10 @@ def get_zones_live_stats(current_user: User = Depends(get_current_user)):
 @router.get("/zone/{zone_id}/history")
 def get_zone_history(
     zone_id: int,
+    request: Request,
     current_user: User = Depends(get_current_user)
 ):
+    simulator = request.app.state.simulator
     raw_history = simulator.get_zone_history(zone_id)
 
     # Flatten avg_pollutants for API consumers
@@ -136,8 +140,10 @@ def get_zone_history(
 @router.get("/zone/{zone_id}/predict")
 def predict_zone(
     zone_id: int,
+    request: Request,
     current_user: User = Depends(get_current_user)
 ):
+    simulator = request.app.state.simulator
     history = simulator.get_zone_history(zone_id)
 
     if len(history) < 5:
@@ -188,8 +194,10 @@ def predict_zone(
 @router.post("/city/set/{city_name}")
 def set_city(
     city_name: str,
+    request: Request,
     current_user: User = Depends(get_current_user)
 ):
+    simulator = request.app.state.simulator
     success = simulator.set_city(city_name)
 
     if not success:
@@ -199,7 +207,8 @@ def set_city(
 
 
 @router.get("/city/current")
-def get_current_city(current_user: User = Depends(get_current_user)):
+def get_current_city(request: Request, current_user: User = Depends(get_current_user)):
+    simulator = request.app.state.simulator
     return {
         "city_center_lat": simulator.city_center_lat,
         "city_center_lon": simulator.city_center_lon
@@ -207,7 +216,7 @@ def get_current_city(current_user: User = Depends(get_current_user)):
 
 
 @router.get("/city/list")
-def list_cities(current_user: User = Depends(get_current_user)):
+def list_cities(request: Request, current_user: User = Depends(get_current_user)):
     from app.config import CITIES
     return {"cities": list(CITIES.keys())}
 
@@ -217,15 +226,22 @@ def list_cities(current_user: User = Depends(get_current_user)):
 # =====================================================
 
 @router.post("/simulation/interval/{seconds}")
-def set_simulation_interval(seconds: int):
-    if seconds < 1 or seconds > 120:
-        raise HTTPException(
-            status_code=400,
-            detail="Interval must be between 1 and 120 seconds"
-        )
+def set_simulation_interval(
+    seconds: int,
+    request: Request,
+    current_user: User = Depends(get_current_user)
+):
+    simulator = request.app.state.simulator
+    if seconds < 1:
+        seconds = 1
+    if seconds > 120:
+        seconds = 120
 
     simulator.simulation_interval = seconds
-    return {"simulation_interval": simulator.simulation_interval}
+    return {
+        "message": "Simulation interval updated",
+        "interval_seconds": simulator.simulation_interval
+    }
 
 
 # =====================================================
@@ -282,9 +298,11 @@ def get_unacknowledged_count(
 
 @router.get("/system/status")
 def get_system_status(
+    request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
+    simulator = request.app.state.simulator
     """Return backend system status metrics."""
     # Get last write times from DB
     last_node = db.query(NodeReading.timestamp).order_by(NodeReading.timestamp.desc()).first()

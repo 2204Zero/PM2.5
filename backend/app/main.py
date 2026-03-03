@@ -4,6 +4,7 @@ from app.routes import router
 from app.database import engine
 from app.models import Base
 from fastapi.middleware.cors import CORSMiddleware
+from app.simulator import AQISimulator
 
 app = FastAPI(
     title="Urban AQI Intelligence API",
@@ -11,17 +12,24 @@ app = FastAPI(
 )
 Base.metadata.create_all(bind=engine)
 
+simulator = AQISimulator()
+app.state.simulator = simulator
+
 @app.on_event("startup")
 async def start_background_simulation():
     asyncio.create_task(simulation_loop())
 
 
 async def simulation_loop():
-    from app.routes import simulator
     print("Simulation loop started")
+
     while True:
-        simulator.simulate()
-        await asyncio.sleep(simulator.simulation_interval)
+        try:
+            app.state.simulator.simulate()
+            print("Tick", app.state.simulator.zone_state[0]["pm25"])
+        except Exception as e:
+            print(f"Simulation error: {e}")
+        await asyncio.sleep(app.state.simulator.simulation_interval)
 
 
 app.add_middleware(

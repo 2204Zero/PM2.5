@@ -1,6 +1,6 @@
 # backend/app/config.py
 
-DATA_MODE = "real"  # "simulator" or "real"
+DATA_MODE = "fake"  # "simulator" or "real"
 REAL_FETCH_INTERVAL_SECONDS = 600
 
 CITY_NAME = "mumbai"  # change to mumbai, bangalore, chennai, kolkata

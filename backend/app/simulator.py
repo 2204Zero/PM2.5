@@ -19,7 +19,7 @@ class AQISimulator:
         self.cols = cols
         self.nodes_per_zone = nodes_per_zone
         self.num_nodes = rows * cols * nodes_per_zone
-        self.simulation_interval = 15  # default seconds
+        self.simulation_interval = 5  # Reduced to 5 seconds for more dynamic updates
         self.last_db_write = 0
         self.last_node_db_write = 0
         self.NODE_DB_INTERVAL = 300
@@ -173,19 +173,19 @@ class AQISimulator:
     # FAKE MODE
     # --------------------------------------------------
     def _simulate_fake_mode(self):
-
+        print("Zone state count:", len(self.zone_state))
         timestamp = datetime.datetime.now().isoformat()
         current_time = time.time()
-        should_write_to_db = (
-            current_time - self.last_node_db_write >= self.NODE_DB_INTERVAL
-        )
-        db = SessionLocal() if should_write_to_db else None
-
-        # 1. Update Zone State (Primary authority)
+        
+        # 1. ALWAYS Update In-Memory State (State Independence)
+        # 1a. Update Zone State (Primary authority)
         for zone_id in self.zone_state:
             self._update_zone_state(zone_id)
 
-        # 2. Derive Node values from Zone state
+        # 1b. Update Zone History (Always)
+        self._update_zone_history(timestamp)
+
+        # 1c. Derive Node values from Zone state
         for node in self.nodes:
             zone_id = node["zone"]
             zone_data = self.zone_state[zone_id]
@@ -201,19 +201,7 @@ class AQISimulator:
                 "humidity": zone_data["humidity"] + random.randint(-2, 2)
             })
 
-            if should_write_to_db:
-                node_entry = NodeReading(
-                    node_id=node["id"],
-                    pm25=node["pm25"],
-                    pm10=node["pm10"],
-                    no2=node["no2"],
-                    co=node["co"],
-                    o3=node["o3"],
-                    temperature=node.get("temperature"),
-                    humidity=node.get("humidity")
-                )
-                db.add(node_entry)
-
+            # In-memory history for nodes
             self.node_history[node["id"]].append({
                 "timestamp": timestamp,
                 "pm25": node["pm25"],
@@ -226,17 +214,36 @@ class AQISimulator:
             if len(self.node_history[node["id"]]) > 50:
                 self.node_history[node["id"]] = self.node_history[node["id"]][-50:]
 
-        if should_write_to_db and db:
+        # 2. PERSISTENCE LAYER (Decoupled from State)
+        should_write_to_db = (
+            current_time - self.last_node_db_write >= self.NODE_DB_INTERVAL
+        )
+        
+        if should_write_to_db:
+            db = SessionLocal()
             try:
+                for node in self.nodes:
+                    node_entry = NodeReading(
+                        node_id=node["id"],
+                        pm25=node["pm25"],
+                        pm10=node["pm10"],
+                        no2=node["no2"],
+                        co=node["co"],
+                        o3=node["o3"],
+                        temperature=node.get("temperature"),
+                        humidity=node.get("humidity")
+                    )
+                    db.add(node_entry)
+                
                 db.commit()
                 self.last_node_db_write = current_time
                 print(f"Node batch write executed at {datetime.datetime.now().isoformat()}")
-            except Exception:
-                raise
+            except Exception as e:
+                print(f"Error persisting nodes: {e}")
+                db.rollback()
             finally:
                 db.close()
 
-        self._update_zone_history(timestamp)
         return self.nodes
 
     # --------------------------------------------------
@@ -265,7 +272,22 @@ class AQISimulator:
         # 2. Independent evolution with reversion and bias
         profile_base = (base_min + base_max) / 2
         
-        drift = random.uniform(-10, 10)
+        base_drift = random.uniform(-10, 10)
+
+        # Demo Mode Amplification:
+        # Faster simulation interval = stronger visible movement.
+        # Slower interval = smoother, realistic movement.
+        if self.simulation_interval <= 2:
+            drift_multiplier = 6
+        elif self.simulation_interval <= 5:
+            drift_multiplier = 3
+        elif self.simulation_interval <= 10:
+            drift_multiplier = 2
+        else:
+            drift_multiplier = 1
+
+        drift = base_drift * drift_multiplier
+        
         reversion = (previous - profile_base) * 0.03
         
         # apply individuality bias
@@ -428,12 +450,7 @@ class AQISimulator:
 
         current_time = time.time()
         
-        #5 minute guard
-        should_write_to_db = (
-            current_time - self.last_db_write >= 300
-        )
-        db = SessionLocal() if should_write_to_db else None
-
+        # 1. ALWAYS Update In-Memory History
         for zone_id, zone_data in self.zone_state.items():
             
             # Zone AQI must be calculated directly from zone PM2.5 state (Primary architecture)
@@ -487,7 +504,7 @@ class AQISimulator:
                 alert_key = (zone_id, level)
                 
                 # DB Check for duplicate within 10 minutes (System Hardening)
-                alert_db = db if db else SessionLocal()
+                alert_db = SessionLocal()
                 try:
                     ten_mins_ago = datetime.datetime.now() - datetime.timedelta(minutes=10)
                     existing_alert = alert_db.query(Alert).filter(
@@ -512,8 +529,7 @@ class AQISimulator:
                     print(f"Error creating alert: {e}")
                     alert_db.rollback()
                 finally:
-                    if not db:
-                        alert_db.close()
+                    alert_db.close()
             
             # Always update last level to track crossings
             self.last_aqi_level_per_zone[zone_id] = level
@@ -533,36 +549,46 @@ class AQISimulator:
                     
                 # Threshold: 2 mins (8 cycles at 15s) for demo/testing
                 if self.zone_incident_tracker[zone_id]["count"] == 8:
-                    self._trigger_incident(zone_id, level, db)
+                    self._trigger_incident(zone_id, level)
             else:
                 # Reset or Resolve incident
                 if zone_id in self.zone_incident_tracker:
-                    self._resolve_incident(zone_id, db)
+                    self._resolve_incident(zone_id)
                     del self.zone_incident_tracker[zone_id]
             # -------------------------------------
 
-            # Persist only if 5-minute interval passed
-            if should_write_to_db and db:
-                zone_entry = ZoneReading(
-                    zone_id=zone_id,
-                    aqi=zone_record["aqi"],
-                    dominant_pollutant=zone_record["dominant_pollutant"],
-                    pm25=avg_data["pm25"],
-                    pm10=avg_data["pm10"],
-                    no2=avg_data["no2"],
-                    co=avg_data["co"],
-                    o3=avg_data["o3"],
-                    trend=zone_record["trend"]
-                    )
-                db.add(zone_entry)
-
-        if should_write_to_db and db:
+        # 2. PERSISTENCE LAYER (Decoupled from State)
+        should_write_to_db = (
+            current_time - self.last_db_write >= 300
+        )
+        
+        if should_write_to_db:
+            db = SessionLocal()
             try:
+                for zone_id, history in self.zone_history.items():
+                    if not history: continue
+                    latest_rec = history[-1]
+                    avg_data = latest_rec["avg_pollutants"]
+                    
+                    zone_entry = ZoneReading(
+                        zone_id=zone_id,
+                        aqi=latest_rec["aqi"],
+                        dominant_pollutant=latest_rec["dominant_pollutant"],
+                        pm25=avg_data["pm25"],
+                        pm10=avg_data["pm10"],
+                        no2=avg_data["no2"],
+                        co=avg_data["co"],
+                        o3=avg_data["o3"],
+                        trend=latest_rec["trend"]
+                    )
+                    db.add(zone_entry)
+                
                 db.commit()
                 self.last_db_write = current_time
                 print(f"Zone batch write executed at {datetime.datetime.now().isoformat()}")
-            except Exception:
-                raise
+            except Exception as e:
+                print(f"Error persisting zones: {e}")
+                db.rollback()
             finally:
                 db.close()
 
