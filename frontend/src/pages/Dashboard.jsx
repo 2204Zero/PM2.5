@@ -237,6 +237,7 @@ function Dashboard() {
 
   return (
     <div
+      className="dashboard-wrapper"
       style={{
         padding: "40px",
         background: "#F8FAFC",
@@ -554,20 +555,27 @@ function Dashboard() {
       {stats && (
         <div className="kpi-grid">
           <StatCard
+            className="kpi-card"
             title="Average AQI"
             value={<AnimatedNumber value={Number(liveStats?.average_aqi || stats.avgAqi)} />}
           />
           <StatCard
+            className="kpi-card"
             title="Highest AQI Zone"
             value={
               worstZone ? `Zone ${worstZone.zone_id}` : "—"
             }
           />
           <StatCard
+            className="kpi-card"
             title="Zones Trending Up"
             value={stats.risingCount}
           />
-          <StatCard title="Active Nodes" value={stats.totalNodes} />
+          <StatCard 
+            className="kpi-card"
+            title="Active Nodes" 
+            value={stats.totalNodes} 
+          />
         </div>
       )}
 
@@ -611,7 +619,7 @@ function Dashboard() {
       </div>
 
       {/* MAIN LAYOUT: MAP + WORST ZONES PANEL */}
-      <div className="main-grid">
+      <div className="main-grid main-layout">
         {/* Map container wrapper */}
         <div style={{ flex: 1, minWidth: 0 }}>
           <div className="map-wrapper">
@@ -767,6 +775,7 @@ function Dashboard() {
 
       {/* FOOTER */}
       <div
+        className="footer-container"
         style={{
           background: "#0F172A",
           color: "#CBD5E1",

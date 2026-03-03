@@ -1,0 +1,76 @@
+/* ============================================ 
+    SAFE MOBILE FIX (REFINED) 
+    Desktop untouched. 
+ ============================================ */ 
+
+ @media (max-width: 768px) { 
+
+   /* Page padding */ 
+   .dashboard-wrapper { 
+     padding: 14px !important; 
+   } 
+
+   /* Header */ 
+   .header-container { 
+     flex-direction: column !important; 
+     align-items: flex-start !important; 
+     gap: 10px !important; 
+   } 
+
+   .header-container h1 { 
+     font-size: 20px !important; 
+     line-height: 1.3 !important; 
+     word-break: break-word !important; 
+   } 
+
+   /* KPI GRID — 2 per row */ 
+   .kpi-grid { 
+     display: grid !important; 
+     grid-template-columns: repeat(2, 1fr) !important; 
+     gap: 10px !important; 
+   } 
+
+   /* Smaller KPI cards */ 
+   .kpi-card { 
+     padding: 12px !important; 
+     border-radius: 10px !important; 
+   } 
+
+   .kpi-card h2 { 
+     font-size: 18px !important; 
+   } 
+
+   .kpi-card p { 
+     font-size: 12px !important; 
+   } 
+
+   /* Reduce spacing above map */ 
+   .main-layout { 
+     flex-direction: column !important; 
+     gap: 12px !important; 
+   } 
+
+   /* Map sizing */ 
+   .leaflet-container { 
+     width: 100% !important; 
+     height: 300px !important; 
+     border-radius: 12px !important; 
+   } 
+
+   /* Side panel full width */ 
+   .side-panel { 
+     width: 100% !important; 
+   } 
+
+   /* Footer */ 
+   .footer-container { 
+     text-align: center !important; 
+     padding: 14px !important; 
+   } 
+
+   /* Remove horizontal scroll */ 
+   body { 
+     overflow-x: hidden !important; 
+   } 
+
+ } 
