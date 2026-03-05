@@ -1,107 +1,294 @@
-<p align="center">
-  <img src="https://readme-typing-svg.demolab.com?font=Inter&weight=600&size=28&pause=1000&color=1F7AE0&center=true&vCenter=true&width=700&lines=Urban+AQI+Intelligence;Real-Time+Air+Quality+Monitoring+Platform;Zone-Based+Intelligence+%7C+ML+Forecasting+%7C+Secure+Admin" />
-</p>
+PM 2.5 Admin Pannel
 
-<p align="center">
-  <img src="https://img.shields.io/badge/Backend-FastAPI-009688?style=for-the-badge&logo=fastapi" />
-  <img src="https://img.shields.io/badge/Frontend-React-20232A?style=for-the-badge&logo=react" />
-  <img src="https://img.shields.io/badge/Database-SQLite-07405E?style=for-the-badge&logo=sqlite" />
-  <img src="https://img.shields.io/badge/Authentication-JWT-blue?style=for-the-badge" />
-  <img src="https://img.shields.io/badge/ML-ScikitLearn-F7931E?style=for-the-badge&logo=scikit-learn" />
-</p>
 
----
+A Smart City Air Quality Monitoring and Simulation Platform that visualizes pollution data,
+simulates IoT sensor networks, and demonstrates how air-quality monitoring infrastructure
+works in an urban environment.
 
-## Overview
+The platform combines:
+- Real-time AQI dashboard
+- Zone-based pollution monitoring
+- Sensor network simulation
+- Predictive analytics
+- Alert and incident system
+- Interactive city visualization
 
-PM2.5 is a full-stack environmental monitoring system designed to simulate distributed air quality nodes, aggregate zone-level intelligence, and provide predictive forecasting under a secure authentication framework.
+It acts as a digital twin prototype for how a real-world smart city air monitoring system could operate.
 
-The platform models a scalable smart-city air monitoring architecture.
+------------------------------------------------------------
 
----
+SYSTEM OVERVIEW
 
-## Architecture
+Air Particles → Sensor Nodes → Zone Hubs → Central Server
 
-<details>
-<summary><b>Backend (FastAPI)</b></summary>
+Components:
 
-- AQI Simulation Engine  
-- Zone Aggregation Engine  
-- JWT Authentication  
-- SQLite Logging  
-- ML Forecasting  
-- Protected APIs  
+1. Sensor Nodes
+Simulate physical air-quality sensors.
+Collect PM2.5, PM10, NO₂, CO, O₃.
+Generate pollution data.
 
-</details>
+2. Zone Hubs
+Aggregate sensor data.
+Represent city zones.
 
-<details>
-<summary><b>Frontend (React + Leaflet)</b></summary>
+3. Central Server
+Receives zone data.
+Processes AQI calculations.
+Generates alerts and incidents.
 
-- Real-time Heatmap  
-- Zone Dashboard  
-- City Control Panel  
-- Session-Based Route Protection  
+4. Dashboard
+Visualizes pollution levels across zones.
+Shows trends and predictions.
 
-</details>
+------------------------------------------------------------
 
----
+FEATURES
 
-## Authentication Flow
+AQI Dashboard
 
-1. User logs in  
-2. Backend generates JWT token  
-3. Token stored in sessionStorage  
-4. Axios attaches Authorization header  
-5. Protected routes validate identity  
-
----
-
-## Core Capabilities
-
-### Real-Time Simulation
-- Node-level pollutant modeling
-- Zone-based AQI aggregation
+- Live AQI monitoring across multiple zones
+- Interactive heatmap visualization
+- Zone-based pollution metrics
 - Dominant pollutant detection
-- Trend classification
+- AQI trend indicators
+- Zone ranking by pollution severity
 
-### Real Data Mode
-- Open-Meteo API integration
-- Zone centroid-based retrieval
-- Smart caching layer
+------------------------------------------------------------
 
-### Intelligence Layer
-- Linear regression forecasting
-- 5-step AQI prediction
-- Risk categorization
+SMART CITY SIMULATION ENGINE
 
-### Database Logging
-- Node readings
-- Zone readings
-- City logs
-- User accounts
+A custom-built simulation engine models realistic urban pollution behavior.
 
----
+Features include:
+- Zone pollution profiles (Low, Medium, High)
+- Gradual pollution drift
+- Traffic-based pollution spikes
+- Independent zone evolution
+- Sensor variability simulation
+- Node-level data generation
 
-## Technology Stack
+------------------------------------------------------------
 
-| Layer | Technologies |
-|-------|-------------|
-| Backend | FastAPI, SQLAlchemy, SQLite |
-| Frontend | React, React Router, Axios |
-| ML | scikit-learn |
-| Auth | JWT, Passlib (bcrypt) |
-| Maps | Leaflet |
+IoT NETWORK DIGITAL TWIN
 
----
+A Canvas-based network simulation demonstrates how pollution data flows through the infrastructure.
 
-## Setup
+Simulation Layers:
 
-### Backend
+1. Air particles entering sensors
+2. Sensors processing air samples
+3. Data packets sent to zone hubs
+4. Zone hubs aggregating sensor data
+5. Aggregated data sent to central server
 
-```bash
+------------------------------------------------------------
+
+NETWORK VISUALIZATION
+
+The system uses a Leaflet map + Canvas overlay architecture:
+
+Leaflet Map (Geographic Context)
+↓
+Canvas Simulation Layer
+↓
+UI Controls
+
+------------------------------------------------------------
+
+SYMBOL-BASED NETWORK COMPONENTS
+
+Air Flow → Particle system
+Sensor Nodes → IoT sensor with signal arcs
+Zone Hubs → Network hub with ports
+Data Packets → Glowing data blocks
+Server → Rack-style server
+
+------------------------------------------------------------
+
+AQI HEATMAP COLOR SYSTEM
+
+AQI Range | Category | Color
+
+0 – 50 → Good → Green
+51 – 100 → Satisfactory → Light Green
+101 – 200 → Moderate → Amber
+201 – 300 → Poor → Red
+301 – 400 → Very Poor → Dark Red
+401+ → Severe → Maroon
+
+------------------------------------------------------------
+
+ALERTS AND INCIDENT ENGINE
+
+Alerts trigger when AQI crosses thresholds:
+Poor
+Very Poor
+Severe
+
+Duplicate alerts within 10 minutes are suppressed.
+
+------------------------------------------------------------
+
+INCIDENT MANAGEMENT SYSTEM
+
+If a zone remains highly polluted for a sustained period,
+an Incident is automatically generated.
+
+Example mitigation actions:
+- Deploy anti-smog guns
+- Restrict heavy vehicle traffic
+- Suspend construction activity
+- Issue public health advisory
+
+------------------------------------------------------------
+
+PREDICTIVE AQI FORECASTING
+
+The platform includes a basic machine learning prediction model using Linear Regression.
+
+It predicts:
+- Future AQI values
+- Risk level for each zone
+
+------------------------------------------------------------
+
+BACKEND ARCHITECTURE
+
+Framework: FastAPI
+
+Responsibilities:
+- AQI simulation
+- Sensor data generation
+- Alert detection
+- Incident management
+- Prediction engine
+- Database persistence
+- Authentication
+
+------------------------------------------------------------
+
+API ENDPOINTS
+
+/auth/register
+/auth/login
+
+/nodes/live
+/zones/live
+/zones/live-stats
+
+/zone/{zone_id}/history
+/zone/{zone_id}/predict
+
+/city/set/{city_name}
+/city/current
+/city/list
+
+/simulation/interval/{seconds}
+
+alerts
+incidents
+system/status
+
+------------------------------------------------------------
+
+FRONTEND ARCHITECTURE
+
+Framework: React (Vite)
+
+Libraries:
+- React Leaflet
+- Axios
+- Canvas API
+
+Main Pages:
+Login Page
+Dashboard
+Zone Details
+Network Simulation
+
+------------------------------------------------------------
+
+DEPLOYMENT
+
+Backend → Render
+Frontend → Vercel
+
+Environment variable:
+
+VITE_API_BASE_URL=https://your-backend-url.onrender.com
+
+------------------------------------------------------------
+
+RUNNING LOCALLY
+
+Backend:
+
 cd backend
-python -m venv venv
-venv\Scripts\activate
 pip install -r requirements.txt
 uvicorn app.main:app --reload
+
+Backend runs on:
+http://127.0.0.1:8000
+
+Frontend:
+
+cd frontend
+npm install
+npm run dev
+
+Frontend runs on:
+http://localhost:5173
+
+------------------------------------------------------------
+
+PROJECT STRUCTURE
+
+urban-aqi-intelligence
+
+backend/
+    app/
+        auth.py
+        simulator.py
+        routes.py
+        models.py
+        database.py
+        config.py
+        aqi_calculator.py
+        main.py
+
+frontend/
+    src/
+        components/
+        pages/
+        simulation/
+        axiosConfig.js
+
+    .env
+
+README.md
+
+------------------------------------------------------------
+
+FUTURE IMPROVEMENTS
+
+- Real sensor integration
+- WebSocket real-time updates
+- Advanced pollution prediction models
+- GPU-based visualization
+- Hardware IoT integration
+- Mobile UI improvements
+
+------------------------------------------------------------
+
+AUTHOR
+
+Lakshya Goyal
+AI & Data Science Student
+
+Interests:
+- Smart city systems
+- Artificial intelligence
+- Environmental technology
+- Large-scale simulation platforms
 
